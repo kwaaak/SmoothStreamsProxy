@@ -1,0 +1,3 @@
+- Obfuscate/Encrypt password in ini file
+- Timer to refresh_session
+- Recording and playback

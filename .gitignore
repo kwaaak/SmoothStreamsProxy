@@ -1,0 +1,9 @@
+*.bak
+*.dat
+*.dir
+*.ini
+*.pyc
+.idea/*
+Python36-64/
+dist/
+logs/
