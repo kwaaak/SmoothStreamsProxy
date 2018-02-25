@@ -40,6 +40,14 @@ logging.Logger.trace = trace
 
 logger = logging.getLogger(__name__)
 
+VALID_SMOOTH_STREAMS_SERVICE_VALUES = ['view247', 'viewmmasr', 'viewss', 'viewstvn']
+VALID_SMOOTH_STREAMS_SERVER_VALUES = ['dap', 'deu', 'deu-de', 'deu-nl', 'deu-nl1', 'deu-nl2', 'deu-nl3', 'deu-nl4',
+                                      'deu-nl5', 'deu-uk', 'deu-uk1', 'deu-uk2', 'dna', 'dnae', 'dnae1', 'dnae2',
+                                      'dnae3', 'dnae4', 'dnae6', 'dnaw', 'dnaw1', 'dnaw2', 'dnaw3', 'dnaw4x'
+                                      ]
+VALID_SMOOTH_STREAMS_PROTOCOL_VALUES = ['hls', 'rtmp']
+VALID_LOGGING_LEVEL_VALUES = ['DEBUG', 'ERROR', 'INFO', 'TRACE']
+
 
 class MultiLineFormatter(logging.Formatter):
     def format(self, record):
@@ -193,11 +201,11 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                         response_text = '#EXTM3U\n' \
                                         '#EXTINF:-1 ,{0}\n' \
                                         'rtmp://{1}.smoothstreams.tv:3635/{2}?wmsAuthSign={3}/ch{4}q1.stream'.format(
-                                            SmoothStreamsProxy.get_channel_name(int(channel_number)),
-                                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
-                                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
-                                            smooth_streams_hash,
-                                            channel_number)
+                            SmoothStreamsProxy.get_channel_name(int(channel_number)),
+                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
+                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
+                            smooth_streams_hash,
+                            channel_number)
 
                         self.__send_http_response(client_ip_address,
                                                   path,
@@ -406,16 +414,160 @@ class SmoothStreamsProxy:
             configuration = configparser.RawConfigParser()
             configuration.read(configuration_file)
 
-            cls.configuration['SERVER_HOST'] = configuration['Server']['hostname']
-            cls.configuration['SERVER_PORT'] = configuration['Server']['port']
+            try:
+                server_section = configuration['Server']
 
-            cls.configuration['SMOOTH_STREAMS_SERVICE'] = configuration['SmoothStreams']['service']
-            cls.configuration['SMOOTH_STREAMS_SERVER'] = configuration['SmoothStreams']['server']
-            cls.configuration['SMOOTH_STREAMS_USERNAME'] = configuration['SmoothStreams']['username']
-            cls.configuration['SMOOTH_STREAMS_PASSWORD'] = configuration['SmoothStreams']['password']
-            cls.configuration['SMOOTH_STREAMS_PROTOCOL'] = configuration['SmoothStreams']['protocol']
+                try:
+                    cls.configuration['SERVER_HOST'] = server_section['hostname']
+                except KeyError:
+                    logger.error('Configuration file => {0}\n'
+                                 'Could not find a hostname parameter within the [Server] section\n'
+                                 'Exiting...'.format(configuration_file))
 
-            cls.configuration['LOGGING_LEVEL'] = configuration['Logging']['level']
+                    sys.exit()
+
+                try:
+                    cls.configuration['SERVER_PORT'] = server_section['port']
+
+                    port = int(cls.configuration['SERVER_PORT'])
+                    if port < 0 or port > 65535:
+                        logger.error(
+                            'Configuration file => {0}\n'
+                            'The port parameter within the [Server] section must be a number between 0 and 65535\n'
+                            'Exiting...'.format(configuration_file))
+
+                        sys.exit()
+                except KeyError:
+                    logger.error('Configuration file => {0}\n'
+                                 'Could not find a port parameter within the [Server] section\n'
+                                 'The port parameter within the [Server] section must be a number between 0 and 65535\n'
+                                 'Exiting...'.format(configuration_file))
+
+                    sys.exit()
+                except ValueError:
+                    logger.error(
+                        'Configuration file => {0}\n'
+                        'The port parameter within the [Server] section must be a number between 0 and 65535\n'
+                        'Exiting...'.format(configuration_file))
+
+                    sys.exit()
+            except KeyError:
+                logger.error(
+                    'Configuration file => {0}\n'
+                    'Could not find a [Server] section\n'
+                    'Exiting...'.format(configuration_file))
+
+                sys.exit()
+
+            try:
+                smooth_streams_section = configuration['SmoothStreams']
+
+                try:
+                    cls.configuration['SMOOTH_STREAMS_SERVICE'] = smooth_streams_section['service']
+
+                    if cls.configuration['SMOOTH_STREAMS_SERVICE'].lower() not in VALID_SMOOTH_STREAMS_SERVICE_VALUES:
+                        logger.error(
+                            'Configuration file => {0}\n'
+                            'The service parameter within the [SmoothStreams] section must be one of\n{1}\n'
+                            'Exiting...'.format(
+                                configuration_file,
+                                '\n'.join(
+                                    ['\u2022 {0}'.format(service) for service in VALID_SMOOTH_STREAMS_SERVICE_VALUES])))
+
+                        sys.exit()
+                except KeyError:
+                    logger.error('Configuration file => {0}\n'
+                                 'Could not find a service parameter within the [SmoothStreams] section\n'
+                                 'The service parameter within the [SmoothStreams] section must be one of\n{1}\n'
+                                 'Exiting...'.format(
+                        configuration_file,
+                        '\n'.join(
+                            ['\u2022 {0}'.format(service) for service in VALID_SMOOTH_STREAMS_SERVICE_VALUES])))
+
+                    sys.exit()
+
+                try:
+                    cls.configuration['SMOOTH_STREAMS_SERVER'] = smooth_streams_section['server']
+
+                    if cls.configuration['SMOOTH_STREAMS_SERVER'].lower() not in VALID_SMOOTH_STREAMS_SERVER_VALUES:
+                        logger.error(
+                            'Configuration file => {0}\n'
+                            'The server parameter within the [SmoothStreams] section must be one of\n{1}\n'
+                            'Exiting...'.format(
+                                configuration_file,
+                                '\n'.join(
+                                    ['\u2022 {0}'.format(service) for service in VALID_SMOOTH_STREAMS_SERVER_VALUES])))
+
+                        sys.exit()
+                except KeyError:
+                    logger.error('Configuration file => {0}\n'
+                                 'Could not find a server parameter within the [SmoothStreams] section\n'
+                                 'The server parameter within the [SmoothStreams] section must be one of\n{1}\n'
+                                 'Exiting...'.format(
+                        configuration_file,
+                        '\n'.join(
+                            ['\u2022 {0}'.format(service) for service in VALID_SMOOTH_STREAMS_SERVER_VALUES])))
+
+                    sys.exit()
+
+                try:
+                    cls.configuration['SMOOTH_STREAMS_USERNAME'] = smooth_streams_section['username']
+                except:
+                    logger.error('Configuration file => {0}\n'
+                                 'Could not find a username parameter within the [SmoothStreams] section\n'
+                                 'Exiting...'.format(configuration_file))
+
+                    sys.exit()
+
+                try:
+                    cls.configuration['SMOOTH_STREAMS_PASSWORD'] = smooth_streams_section['password']
+                except:
+                    logger.error('Configuration file => {0}\n'
+                                 'Could not find a password parameter within the [SmoothStreams] section\n'
+                                 'Exiting...'.format(configuration_file))
+
+                    sys.exit()
+
+                try:
+                    cls.configuration['SMOOTH_STREAMS_PROTOCOL'] = smooth_streams_section['protocol']
+
+                    if cls.configuration['SMOOTH_STREAMS_PROTOCOL'].lower() not in VALID_SMOOTH_STREAMS_PROTOCOL_VALUES:
+                        logger.error(
+                            'Configuration file => {0}\n'
+                            'The protocol parameter within the [SmoothStreams] section must be one of\n{1}\n'
+                            'Exiting...'.format(
+                                configuration_file,
+                                '\n'.join(
+                                    ['\u2022 {0}'.format(service) for service in VALID_SMOOTH_STREAMS_PROTOCOL_VALUES])))
+
+                        sys.exit()
+                except KeyError:
+                    logger.error('Configuration file => {0}\n'
+                                 'Could not find a protocol parameter within the [SmoothStreams] section\n'
+                                 'The protocol parameter within the [SmoothStreams] section must be one of\n{1}\n'
+                                 'Exiting...'.format(
+                        configuration_file,
+                        '\n'.join(
+                            ['\u2022 {0}'.format(service) for service in VALID_SMOOTH_STREAMS_PROTOCOL_VALUES])))
+
+                    sys.exit()
+            except KeyError:
+                logger.error(
+                    'Configuration file => {0}\n'
+                    'Could not find a [SmoothStreams] section\n'
+                    'Exiting...'.format(configuration_file))
+
+                sys.exit()
+
+            try:
+                logging_section = configuration['Logging']
+
+                cls.configuration['LOGGING_LEVEL'] = logging_section['level']
+
+                if cls.configuration['LOGGING_LEVEL'].upper() not in VALID_LOGGING_LEVEL_VALUES:
+                    cls.configuration['LOGGING_LEVEL'] = 'INFO'
+            except KeyError:
+                cls.configuration['LOGGING_LEVEL'] = 'INFO'
 
             logger.info('Read configuration file {0}'.format(configuration_file))
             logger.info('SERVER_HOST = {0}'.format(cls.configuration['SERVER_HOST']))
