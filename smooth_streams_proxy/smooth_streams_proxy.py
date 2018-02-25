@@ -376,6 +376,8 @@ class SmoothStreamsProxyHTTPRequestHandlerThread(threading.Thread):
 class SmoothStreamsProxy:
     EPG_SOURCES = ['https://sstv.fog.pt/epg', 'http://ca.epgrepo.download', 'http://eu.epgrepo.download']
 
+    refresh_session_timer = None
+
     http_request_handler_threads = None
 
     configuration = {}
@@ -476,10 +478,26 @@ class SmoothStreamsProxy:
             pass
 
     @classmethod
+    def timed_refresh_session(cls):
+        logger.debug('Authorization hash refresh timer triggered')
+
+        cls.refresh_session()
+
+    @classmethod
     def refresh_session(cls):
         with cls.session_lock:
             if cls.__do_retrieve_authorization_hash():
                 cls.__retrieve_authorization_hash()
+
+                if cls.refresh_session_timer:
+                    cls.refresh_session_timer.cancel()
+
+            logger.debug('Starting authorization hash refresh timer')
+
+            now = datetime.now(pytz.utc)
+            cls.refresh_session_timer = threading.Timer((cls.session['expires_on'] - now).total_seconds() - 45,
+                                                        cls.timed_refresh_session)
+            cls.refresh_session_timer.start()
 
     @classmethod
     def __do_retrieve_authorization_hash(cls):
@@ -624,14 +642,15 @@ class SmoothStreamsProxy:
                 with cls.files_map_lock:
                     cls.files_map = smooth_streams_proxy_db['files_map']
 
-                    logger.debug('Loaded shelved files:\n{0}'.format(
-                        '\n'.join(
-                            ['File name => {0}\nFile size => {1:,}\nValid to  => {2}\n'.format(
-                                file_name,
-                                len(cls.files_map[file_name]['content']),
-                                cls.files_map[file_name]['next_update_date_time'].astimezone(
-                                    get_localzone()).strftime('%Y-%m-%d %H:%M:%S')) for file_name
-                                in sorted(cls.files_map)]).strip()))
+                    if not cls.files_map:
+                        logger.debug('Loaded shelved files:\n{0}'.format(
+                            '\n'.join(
+                                ['File name => {0}\nFile size => {1:,}\nValid to  => {2}\n'.format(
+                                    file_name,
+                                    len(cls.files_map[file_name]['content']),
+                                    cls.files_map[file_name]['next_update_date_time'].astimezone(
+                                        get_localzone()).strftime('%Y-%m-%d %H:%M:%S')) for file_name
+                                    in sorted(cls.files_map)]).strip()))
             except KeyError:
                 logger.debug(
                     'Failed to load files from {0}'.format(os.path.join(os.getcwd(), 'smooth_streams_proxy_db')))
@@ -862,6 +881,7 @@ def main():
 
     SmoothStreamsProxy.cleanup_shelf()
     SmoothStreamsProxy.load_shelved_settings()
+    SmoothStreamsProxy.refresh_session()
     SmoothStreamsProxy.start(server_address, server_socket, 5)
 
     for smooth_streams_proxy_http_request_handler_thread in SmoothStreamsProxy.http_request_handler_threads:
