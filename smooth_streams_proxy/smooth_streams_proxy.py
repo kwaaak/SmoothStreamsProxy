@@ -650,18 +650,25 @@ class SmoothStreamsProxy:
     @classmethod
     def refresh_session(cls):
         with cls.session_lock:
+            do_start_timer = False
+
             if cls.__do_retrieve_authorization_hash():
+                do_start_timer = True
+
                 cls.__retrieve_authorization_hash()
 
                 if cls.refresh_session_timer:
                     cls.refresh_session_timer.cancel()
+            elif not cls.refresh_session_timer:
+                do_start_timer = True
 
-            logger.debug('Starting authorization hash refresh timer')
+            if do_start_timer:
+                logger.debug('Starting authorization hash refresh timer')
 
-            now = datetime.now(pytz.utc)
-            cls.refresh_session_timer = threading.Timer((cls.session['expires_on'] - now).total_seconds() - 45,
-                                                        cls.timed_refresh_session)
-            cls.refresh_session_timer.start()
+                now = datetime.now(pytz.utc)
+                cls.refresh_session_timer = threading.Timer((cls.session['expires_on'] - now).total_seconds() - 45,
+                                                            cls.timed_refresh_session)
+                cls.refresh_session_timer.start()
 
     @classmethod
     def __do_retrieve_authorization_hash(cls):
@@ -1008,6 +1015,8 @@ class SmoothStreamsProxyConfigurationEventHandler(FileSystemEventHandler):
                 last_modification_date_time = SmoothStreamsProxyConfigurationEventHandler.last_modification_date_time
                 now = datetime.now(pytz.utc)
 
+                # Read the configuration file if this is the first modification since the proxy started or if the
+                # modification events are at least 1s apart (A hack to deal with watchdog generating duplicate events)
                 if not last_modification_date_time:
                     read_configuration_file = True
 
@@ -1049,7 +1058,6 @@ def initialize_logging(log_file):
                                                                  backupCount=10)
     rotating_file_handler.setFormatter(formatter)
 
-    logger.setLevel(logging.INFO)
     logger.addHandler(console_handler)
     logger.addHandler(rotating_file_handler)
 
@@ -1068,14 +1076,10 @@ def main():
     initialize_logging(log_file)
 
     SmoothStreamsProxy.read_configuration_file()
-
     try:
-        log_level = getattr(logging, SmoothStreamsProxy.configuration['LOGGING_LEVEL'].upper())
-
-        set_logging_level(log_level)
+        set_logging_level(getattr(logging, SmoothStreamsProxy.configuration['LOGGING_LEVEL'].upper()))
     except AttributeError:
-        logger.error('{0} is not a valid logging level. Reverting to INFO.'.format(
-            SmoothStreamsProxy.configuration['LOGGING_LEVEL'].upper()))
+        pass
 
     smooth_streams_proxy_configuration_event_handler = SmoothStreamsProxyConfigurationEventHandler()
     watchdog_observer = Observer()
