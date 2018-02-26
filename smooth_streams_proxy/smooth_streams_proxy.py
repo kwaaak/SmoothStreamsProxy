@@ -22,6 +22,8 @@ import pytz
 import requests
 from lxml import etree
 from tzlocal import get_localzone
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 from .exceptions import SmoothStreamsProxyException
 
@@ -994,6 +996,41 @@ class SmoothStreamsProxy:
         return cls.EPG_SOURCES[random.randint(0, len(cls.EPG_SOURCES) - 1)]
 
 
+class SmoothStreamsProxyConfigurationEventHandler(FileSystemEventHandler):
+    lock = threading.Lock()
+    last_modification_date_time = None
+
+    def on_modified(self, event):
+        with SmoothStreamsProxyConfigurationEventHandler.lock:
+            configuration_file = SmoothStreamsProxy.get_configuration_file()
+            if event.src_path == configuration_file:
+                read_configuration_file = False
+                last_modification_date_time = SmoothStreamsProxyConfigurationEventHandler.last_modification_date_time
+                now = datetime.now(pytz.utc)
+
+                if not last_modification_date_time:
+                    read_configuration_file = True
+
+                    SmoothStreamsProxyConfigurationEventHandler.last_modification_date_time = now
+                else:
+                    total_time_between_modifications = (now - last_modification_date_time).total_seconds()
+
+                    if total_time_between_modifications >= 1.0:
+                        read_configuration_file = True
+
+                        SmoothStreamsProxyConfigurationEventHandler.last_modification_date_time = now
+
+                if read_configuration_file:
+                    SmoothStreamsProxy.read_configuration_file(initial_read=False)
+
+                    try:
+                        log_level = getattr(logging, SmoothStreamsProxy.configuration['LOGGING_LEVEL'].upper())
+
+                        set_logging_level(log_level)
+                    except AttributeError:
+                        pass
+
+
 def set_logging_level(log_level):
     logger.setLevel(log_level)
 
@@ -1040,6 +1077,11 @@ def main():
         logger.error('{0} is not a valid logging level. Reverting to INFO.'.format(
             SmoothStreamsProxy.configuration['LOGGING_LEVEL'].upper()))
 
+    smooth_streams_proxy_configuration_event_handler = SmoothStreamsProxyConfigurationEventHandler()
+    watchdog_observer = Observer()
+    watchdog_observer.schedule(smooth_streams_proxy_configuration_event_handler, os.getcwd(), recursive=False)
+    watchdog_observer.start()
+
     logger.info('Starting SmoothStreams Proxy at {0} listening on port {1}'.format(
         SmoothStreamsProxy.configuration['SERVER_HOST'],
         SmoothStreamsProxy.configuration['SERVER_PORT']))
@@ -1057,5 +1099,7 @@ def main():
 
     for smooth_streams_proxy_http_request_handler_thread in SmoothStreamsProxy.http_request_handler_threads:
         smooth_streams_proxy_http_request_handler_thread.join()
+
+    watchdog_observer.join()
 
     format_date_time(time.time())
