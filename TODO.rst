@@ -1,3 +1,2 @@
-- Obfuscate/Encrypt password in ini file
-- Timer to refresh_session
+- Write files downloaded to disk and flush from memory
 - Recording and playback
