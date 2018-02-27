@@ -7,10 +7,9 @@ Release History
 ------------------
 
 * Added validations when parsing the configuration file along with error messages
-* Added a timer that will automatically update the authorization hash in case there are no active clients
-** The timer will trigger 45 seconds before the authorization hash is set to expire
-** If the authorization hash is updated by a client request then the current timer is cancelled and a new timer is initiated
-** Practically this timer will only update the authorization hash if explicit update is performed as a result of a client requesting a channel
+* Added a timer that will automatically retrieve a new authorization hash
+    * The timer will trigger 45 seconds before the authorization hash is set to expire
+    * If a new authorization hash is retrieved by a client request (As a result of a request to http://<hostname>:<port>/playlist.m3u8?channel_number=XX) then the current timer is cancelled and a new timer is initiated
 * Added watchdog functionality that will monitor the configuration file for modifications
 * Added functionality to obfuscate/encrypt the password in the configuration file following the first run
 * Lots of refactoring and various bug fixes
