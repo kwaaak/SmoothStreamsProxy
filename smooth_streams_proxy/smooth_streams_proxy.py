@@ -64,7 +64,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
     @classmethod
     def _download_chunks_m3u8(cls, path, client_ip_address):
         try:
-            url = '{0}{1}'.format(
+            full_url = '{0}{1}'.format(
                 SmoothStreamsProxy.get_serviceable_client_parameter(client_ip_address,
                                                                     'last_requested_channel_url'),
                 path)
@@ -73,12 +73,16 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
             return requests.codes.BAD_REQUEST, None
 
-        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, url))
+        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, full_url))
 
         smooth_streams_session = SmoothStreamsProxy.get_session_parameter('http_session')
+        parsed_url = urllib.parse.urlparse(full_url)
 
         response = SmoothStreamsProxy.make_http_request(smooth_streams_session.get,
-                                                        url,
+                                                        '{0}://{1}{2}'.format(parsed_url.scheme,
+                                                                              parsed_url.netloc,
+                                                                              parsed_url.path),
+                                                        params=dict(urllib.parse.parse_qsl(parsed_url.query)),
                                                         headers=smooth_streams_session.headers,
                                                         cookies=smooth_streams_session.cookies.get_dict())
 
@@ -91,7 +95,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                 'Response from {0}:\n'
                 '[Status Code]\n=============\n{1}\n\n'
                 '[Header]\n========\n{2}\n\n'
-                '[Content]\n=========\n{3}\n'.format(url,
+                '[Content]\n=========\n{3}\n'.format(full_url,
                                                      response_status_code,
                                                      '\n'.join(['{0:32} => {1!s}'.format(
                                                          key,
@@ -101,7 +105,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             return response_status_code, response_text
         else:
             logger.error(
-                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, url,
+                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, full_url,
                                                                            client_ip_address))
 
             return response_status_code, None
@@ -109,7 +113,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
     @classmethod
     def _download_playlist_m3u8(cls, path, client_ip_address, smooth_streams_hash):
         try:
-            url = '{0}/playlist.m3u8?wmsAuthSign={1}'.format(
+            full_url = '{0}/playlist.m3u8?wmsAuthSign={1}'.format(
                 SmoothStreamsProxy.get_serviceable_client_parameter(client_ip_address,
                                                                     'last_requested_channel_url'),
                 smooth_streams_hash)
@@ -118,13 +122,17 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
             return requests.codes.BAD_REQUEST, None
 
-        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, url))
+        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, full_url))
 
         smooth_streams_session = SmoothStreamsProxy.get_session_parameter('http_session')
+        parsed_url = urllib.parse.urlparse(full_url)
 
         response = SmoothStreamsProxy.make_http_request(
             smooth_streams_session.get,
-            url,
+            '{0}://{1}{2}'.format(parsed_url.scheme,
+                                  parsed_url.netloc,
+                                  parsed_url.path),
+            params=dict(urllib.parse.parse_qsl(parsed_url.query)),
             headers=smooth_streams_session.headers,
             cookies=smooth_streams_session.cookies.get_dict())
 
@@ -137,7 +145,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                 'Response from {0}:\n'
                 '[Status Code]\n=============\n{1}\n\n'
                 '[Header]\n========\n{2}\n\n'
-                '[Content]\n=========\n{3}\n'.format(url, response_status_code,
+                '[Content]\n=========\n{3}\n'.format(full_url, response_status_code,
                                                      '\n'.join(['{0:32} => {1!s}'.format(
                                                          key,
                                                          response_headers[key])
@@ -147,7 +155,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             return response_status_code, response_text
         else:
             logger.error(
-                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, url,
+                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, full_url,
                                                                            client_ip_address))
 
             return response_status_code, None
@@ -155,7 +163,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
     @classmethod
     def _download_ts_file(cls, path, client_ip_address):
         try:
-            url = '{0}{1}'.format(
+            full_url = '{0}{1}'.format(
                 SmoothStreamsProxy.get_serviceable_client_parameter(client_ip_address,
                                                                     'last_requested_channel_url'),
                 path)
@@ -164,12 +172,16 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
             return requests.codes.BAD_REQUEST, None
 
-        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, url))
+        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, full_url))
 
         smooth_streams_session = SmoothStreamsProxy.get_session_parameter('http_session')
+        parsed_url = urllib.parse.urlparse(full_url)
 
         response = SmoothStreamsProxy.make_http_request(smooth_streams_session.get,
-                                                        url,
+                                                        '{0}://{1}{2}'.format(parsed_url.scheme,
+                                                                              parsed_url.netloc,
+                                                                              parsed_url.path),
+                                                        params=dict(urllib.parse.parse_qsl(parsed_url.query)),
                                                         headers=smooth_streams_session.headers,
                                                         cookies=smooth_streams_session.cookies.get_dict())
 
@@ -182,7 +194,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                 'Response from {0}:\n'
                 '[Status Code]\n=============\n{1}\n\n'
                 '[Header]\n========\n{2}\n\n'
-                '[Content]\n=========\n{3:,}\n'.format(url,
+                '[Content]\n=========\n{3:,}\n'.format(full_url,
                                                        response_status_code,
                                                        '\n'.join(['{0:32} => {1!s}'.format(
                                                            key,
@@ -193,7 +205,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             return response_status_code, response_content
         else:
             logger.error(
-                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, url,
+                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, full_url,
                                                                            client_ip_address))
 
             return response_status_code, None
@@ -788,7 +800,9 @@ class SmoothStreamsProxy:
             url = 'https://auth.smoothstreams.tv/hash_api.php'
 
         response = cls.make_http_request(
-            session.get, url, params={
+            session.get,
+            url,
+            params={
                 'username': cls.get_configuration_parameter('SMOOTH_STREAMS_USERNAME'),
                 'password': cls._decrypt_password().decode(),
                 'site': cls.get_configuration_parameter('SMOOTH_STREAMS_SERVICE')},
