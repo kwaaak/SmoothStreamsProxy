@@ -3,6 +3,20 @@
 Release History
 ===============
 
+1.2.0 (2018-28-02)
+------------------
+
+* Added nimble session "hijacking"
+    * The chunks.m3u8 link returned by SmoothStreams contains 2 parameters (nimblesessionid & wmsAuthSign)
+    * wmsAuthSign is the authorization hash
+    * The chunks.m3u8 link is only updated if a user switches to a different channel. As long as the same channel is
+    being watched, the same chunks.m3u8 link is being used
+    * As a result if the authorization hash expires while a channel is being watched the stream will stop until the user
+    switches channels to retrieve a new authorization hash
+    * The functionality added is to prevent this from happening by manipulating the values of the 2 parameters
+    (nimblesessionid & wmsAuthSign) to valid values
+* Code refactoring and various bug fixes
+
 1.1.0 (2018-27-02)
 ------------------
 
