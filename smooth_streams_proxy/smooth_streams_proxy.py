@@ -971,7 +971,7 @@ class SmoothStreamsProxy():
             playlist_m3u8 = []
             client_uuid = uuid.uuid4()
 
-            for channel_key in channels_json:
+            for channel_key in sorted(channels_json, key=int):
                 channel = channels_json[channel_key]
 
                 group_title = '24/7 Channels' if channel['247'] == 1 else 'Empty Channels'
