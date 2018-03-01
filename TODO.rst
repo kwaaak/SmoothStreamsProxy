@@ -1,5 +1,3 @@
-- Add UUID to URLs
-- Add channel_number parameter to chunks and ts file URLs
 - Handle 403 error (Refresh session + Handle exceptions in Refresh session)
 - Write files downloaded to disk and flush from memory
 - Recording and playback

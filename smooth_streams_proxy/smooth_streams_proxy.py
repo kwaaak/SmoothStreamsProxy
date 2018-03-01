@@ -13,6 +13,7 @@ import socket
 import sys
 import threading
 import urllib.parse
+import uuid
 from datetime import datetime
 from datetime import timedelta
 from email.utils import formatdate
@@ -48,7 +49,7 @@ logger = logging.getLogger(__name__)
 class MultiLineFormatter(logging.Formatter):
     def format(self, record):
         formatted_string = logging.Formatter.format(self, record)
-        header, footer = formatted_string.split(record.message)
+        (header, footer) = formatted_string.split(record.message)
         formatted_string = formatted_string.replace('\n', '\n' + ' ' * len(header))
         return formatted_string
 
@@ -62,20 +63,20 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
     _lock = threading.Lock()
 
     @classmethod
-    def _download_chunks_m3u8(cls, path, client_ip_address):
-        try:
-            full_url = '{0}{1}'.format(
-                SmoothStreamsProxy.get_serviceable_client_parameter(client_ip_address,
-                                                                    'last_requested_channel_url'),
-                path)
-        except KeyError:
-            logger.error('Client {0} not in serviceable clients'.format(client_ip_address))
+    def _download_chunks_m3u8(cls, path, channel_number, client_ip_address, client_uuid):
+        full_url = 'https://{0}.smoothstreams.tv/{1}/ch{2}q1.stream{3}'.format(
+            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
+            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
+            channel_number,
+            path.replace('channel_number={0}&client_uuid={1}&'.format(channel_number, client_uuid), ''))
 
-            return requests.codes.BAD_REQUEST, None
-
-        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, full_url))
+        logger.debug('Proxying request for {0} from {1}/{2} to {3}'.format(path,
+                                                                           client_ip_address,
+                                                                           client_uuid,
+                                                                           full_url))
 
         smooth_streams_session = SmoothStreamsProxy.get_session_parameter('http_session')
+
         parsed_url = urllib.parse.urlparse(full_url)
 
         response = SmoothStreamsProxy.make_http_request(smooth_streams_session.get,
@@ -102,39 +103,43 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                                          response_headers[key]) for key in sorted(response_headers)]),
                                                      response_text))
 
-            return response_status_code, response_text
+            return (response_status_code, response_text.replace('.ts?',
+                                                                '.ts?channel_number={0}&client_uuid={1}&'.format(
+                                                                    channel_number,
+                                                                    client_uuid)))
         else:
             logger.error(
-                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, full_url,
-                                                                           client_ip_address))
+                'HTTP error {0} encountered requesting {1} for {2}/{3}'.format(response_status_code,
+                                                                               full_url,
+                                                                               client_ip_address,
+                                                                               client_uuid))
 
-            return response_status_code, None
+            return (response_status_code, None)
 
     @classmethod
-    def _download_playlist_m3u8(cls, path, client_ip_address, smooth_streams_hash):
-        try:
-            full_url = '{0}/playlist.m3u8?wmsAuthSign={1}'.format(
-                SmoothStreamsProxy.get_serviceable_client_parameter(client_ip_address,
-                                                                    'last_requested_channel_url'),
-                smooth_streams_hash)
-        except KeyError:
-            logger.error('Client {0} not in serviceable clients'.format(client_ip_address))
+    def _download_playlist_m3u8(cls, path, channel_number, client_ip_address, client_uuid, smooth_streams_hash):
+        full_url = 'https://{0}.smoothstreams.tv/{1}/ch{2}q1.stream/playlist.m3u8?wmsAuthSign={3}'.format(
+            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
+            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
+            channel_number,
+            smooth_streams_hash)
 
-            return requests.codes.BAD_REQUEST, None
-
-        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, full_url))
+        logger.debug('Proxying request for {0} from {1}/{2} to {3}'.format(path,
+                                                                           client_ip_address,
+                                                                           client_uuid,
+                                                                           full_url))
 
         smooth_streams_session = SmoothStreamsProxy.get_session_parameter('http_session')
+
         parsed_url = urllib.parse.urlparse(full_url)
 
-        response = SmoothStreamsProxy.make_http_request(
-            smooth_streams_session.get,
-            '{0}://{1}{2}'.format(parsed_url.scheme,
-                                  parsed_url.netloc,
-                                  parsed_url.path),
-            params=dict(urllib.parse.parse_qsl(parsed_url.query)),
-            headers=smooth_streams_session.headers,
-            cookies=smooth_streams_session.cookies.get_dict())
+        response = SmoothStreamsProxy.make_http_request(smooth_streams_session.get,
+                                                        '{0}://{1}{2}'.format(parsed_url.scheme,
+                                                                              parsed_url.netloc,
+                                                                              parsed_url.path),
+                                                        params=dict(urllib.parse.parse_qsl(parsed_url.query)),
+                                                        headers=smooth_streams_session.headers,
+                                                        cookies=smooth_streams_session.cookies.get_dict())
 
         response_status_code = response.status_code
         if response_status_code == requests.codes.ok:
@@ -152,29 +157,33 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                                          for key in sorted(response_headers)]),
                                                      response_text))
 
-            return response_status_code, response_text
+            return (response_status_code, response_text.replace(
+                'chunks.m3u8?',
+                'chunks.m3u8?channel_number={0}&client_uuid={1}&'.format(channel_number, client_uuid)))
         else:
             logger.error(
-                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, full_url,
-                                                                           client_ip_address))
+                'HTTP error {0} encountered requesting {1} for {2}/{3}'.format(response_status_code,
+                                                                               full_url,
+                                                                               client_ip_address,
+                                                                               client_uuid))
 
-            return response_status_code, None
+            return (response_status_code, None)
 
     @classmethod
-    def _download_ts_file(cls, path, client_ip_address):
-        try:
-            full_url = '{0}{1}'.format(
-                SmoothStreamsProxy.get_serviceable_client_parameter(client_ip_address,
-                                                                    'last_requested_channel_url'),
-                path)
-        except KeyError:
-            logger.error('Client {0} not in serviceable clients'.format(client_ip_address))
+    def _download_ts_file(cls, path, channel_number, client_ip_address, client_uuid):
+        full_url = 'https://{0}.smoothstreams.tv/{1}/ch{2}q1.stream{3}'.format(
+            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
+            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
+            channel_number,
+            path.replace('channel_number={0}&client_uuid={1}&'.format(channel_number, client_uuid), ''))
 
-            return requests.codes.BAD_REQUEST, None
-
-        logger.debug('Proxying request for {0} from {1} to {2}'.format(path, client_ip_address, full_url))
+        logger.debug('Proxying request for {0} from {1}/{2} to {3}'.format(path,
+                                                                           client_ip_address,
+                                                                           client_uuid,
+                                                                           full_url))
 
         smooth_streams_session = SmoothStreamsProxy.get_session_parameter('http_session')
+
         parsed_url = urllib.parse.urlparse(full_url)
 
         response = SmoothStreamsProxy.make_http_request(smooth_streams_session.get,
@@ -202,17 +211,17 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                                            for key in sorted(response_headers)]),
                                                        len(response_content)))
 
-            return response_status_code, response_content
+            return (response_status_code, response_content)
         else:
             logger.error(
-                'HTTP error {0} encountered requesting {1} for {2}'.format(response_status_code, full_url,
-                                                                           client_ip_address))
+                'HTTP error {0} encountered requesting {1} for {2}/{3}'.format(response_status_code,
+                                                                               full_url,
+                                                                               client_ip_address,
+                                                                               client_uuid))
 
-            return response_status_code, None
+            return (response_status_code, None)
 
     def _generate_playlist_m3u8(self, path, client_ip_address, protocol):
-        SmoothStreamsProxy.refresh_serviceable_clients(client_ip_address)
-
         channels_file_name = 'channels.json'
 
         with SmoothStreamsProxyHTTPRequestHandler._lock:
@@ -234,6 +243,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
         playlist_m3u8 = SmoothStreamsProxy.generate_playlist_m3u8(protocol)
         self._send_http_response(client_ip_address,
+                                 None,
                                  path,
                                  requests.codes.OK,
                                  SmoothStreamsProxyHTTPRequestHandler._prepare_response_headers(
@@ -258,8 +268,8 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                 'Server': 'SmoothStreamsProxy'
                 }
 
-    def _send_http_response(self, client_ip_address, path, response_status_code, response_headers, response_content,
-                            do_print_content=True):
+    def _send_http_response(self, client_ip_address, client_uuid, path, response_status_code, response_headers,
+                            response_content, do_print_content=True):
         self.send_response(requests.codes.OK)
 
         headers = []
@@ -270,10 +280,11 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
         logger.trace(
-            'Response to {0} for {1}:\n'
-            '[Status Code]\n=============\n{2}\n\n'
-            '[Header]\n========\n{3}\n\n'
-            '[Content]\n=========\n{4:{5}}\n'.format(client_ip_address,
+            'Response to {0}{1} for {2}:\n'
+            '[Status Code]\n=============\n{3}\n\n'
+            '[Header]\n========\n{4}\n\n'
+            '[Content]\n=========\n{5:{6}}\n'.format(client_ip_address,
+                                                     '/{0}'.format(client_uuid) if client_uuid else '',
                                                      path,
                                                      response_status_code,
                                                      '\n'.join(headers),
@@ -296,25 +307,19 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             do_generate_playlist_m3u8 = False
 
             if '?' in path:
-                channel_number, protocol = SmoothStreamsProxyHTTPRequestHandler._parse_query_string(
+                (channel_number, client_uuid, protocol) = SmoothStreamsProxyHTTPRequestHandler._parse_query_string(
                     path,
                     {'channel_number': None,
+                     'client_uuid': None,
                      'protocol': protocol})
 
                 if channel_number:
                     logger.info(
-                        '{0} requested from {1}'.format(SmoothStreamsProxy.get_channel_name(int(channel_number)),
-                                                        client_ip_address))
+                        '{0} requested from {1}/{2}'.format(SmoothStreamsProxy.get_channel_name(int(channel_number)),
+                                                            client_ip_address,
+                                                            client_uuid))
 
-                    SmoothStreamsProxy.refresh_serviceable_clients(client_ip_address)
-                    SmoothStreamsProxy.set_serviceable_client_parameter(
-                        client_ip_address,
-                        'last_requested_channel_url',
-                        'https://{0}.smoothstreams.tv/{1}/ch{2}q1.stream'.format(
-                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
-                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
-                            channel_number)
-                    )
+                    SmoothStreamsProxy.refresh_serviceable_clients(client_uuid, client_ip_address)
 
                     with SmoothStreamsProxyHTTPRequestHandler._lock:
                         try:
@@ -327,13 +332,16 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                         smooth_streams_hash = SmoothStreamsProxy.get_session_parameter('hash')
 
                     if protocol == 'hls':
-                        response_status_code, response_text = \
+                        (response_status_code, response_text) = \
                             SmoothStreamsProxyHTTPRequestHandler._download_playlist_m3u8(path,
+                                                                                         channel_number,
                                                                                          client_ip_address,
+                                                                                         client_uuid,
                                                                                          smooth_streams_hash)
 
                         if response_status_code == requests.codes.ok:
                             self._send_http_response(client_ip_address,
+                                                     client_uuid,
                                                      path,
                                                      response_status_code,
                                                      SmoothStreamsProxyHTTPRequestHandler._prepare_response_headers(
@@ -346,11 +354,11 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                         response_text = '#EXTM3U\n' \
                                         '#EXTINF:-1 ,{0}\n' \
                                         'rtmp://{1}.smoothstreams.tv:3635/{2}?wmsAuthSign={3}/ch{4}q1.stream'.format(
-                            SmoothStreamsProxy.get_channel_name(int(channel_number)),
-                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
-                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
-                            smooth_streams_hash,
-                            channel_number)
+                                            SmoothStreamsProxy.get_channel_name(int(channel_number)),
+                                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
+                                            SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
+                                            smooth_streams_hash,
+                                            channel_number)
 
                         self._send_http_response(client_ip_address,
                                                  path,
@@ -377,7 +385,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             if do_generate_playlist_m3u8:
                 self._generate_playlist_m3u8(path, client_ip_address, protocol)
         elif path.find('epg.xml') != -1:
-            number_of_days, = SmoothStreamsProxyHTTPRequestHandler._parse_query_string(path, {'number_of_days': 1})
+            (number_of_days,) = SmoothStreamsProxyHTTPRequestHandler._parse_query_string(path, {'number_of_days': 1})
             channels_file_name = 'xmltv{0}.xml'.format(number_of_days)
 
             with SmoothStreamsProxyHTTPRequestHandler._lock:
@@ -407,10 +415,14 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                      epg,
                                      do_print_content=False)
         elif path.find('chunks.m3u8') != -1:
-            nimble_session_id_in_request, smooth_streams_hash_in_request = \
+            (channel_number, client_uuid, nimble_session_id_in_request, smooth_streams_hash_in_request) = \
                 SmoothStreamsProxyHTTPRequestHandler._parse_query_string(path,
-                                                                         {'nimblesessionid': None,
+                                                                         {'channel_number': None,
+                                                                          'client_uuid': None,
+                                                                          'nimblesessionid': None,
                                                                           'wmsAuthSign': None})
+
+            SmoothStreamsProxy.refresh_serviceable_clients(client_uuid, client_ip_address)
 
             smooth_streams_hash = SmoothStreamsProxy.get_session_parameter('hash')
 
@@ -418,20 +430,25 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                 nimble_session_id = SmoothStreamsProxy.get_nimble_session_id(nimble_session_id_in_request)
 
                 if not nimble_session_id:
-                    logger.debug('Authorization hash {0} in request from {1} expired'.format(
+                    logger.debug('Authorization hash {0} in request from {1}/{2} expired'.format(
                         smooth_streams_hash_in_request,
-                        client_ip_address))
-
-                    response_status_code, response_text = SmoothStreamsProxyHTTPRequestHandler._download_playlist_m3u8(
-                        path,
                         client_ip_address,
+                        client_uuid))
+
+                    (
+                        response_status_code,
+                        response_text) = SmoothStreamsProxyHTTPRequestHandler._download_playlist_m3u8(
+                        path,
+                        channel_number,
+                        client_ip_address,
+                        client_uuid,
                         smooth_streams_hash)
 
                     if response_status_code == requests.codes.ok:
                         m3u8_obj = m3u8.loads(response_text)
 
                         path = '/{0}'.format(m3u8_obj.data['playlists'][0]['uri'])
-                        nimble_session_id, = SmoothStreamsProxyHTTPRequestHandler._parse_query_string(
+                        (nimble_session_id,) = SmoothStreamsProxyHTTPRequestHandler._parse_query_string(
                             path,
                             {'nimblesessionid': None})
 
@@ -444,12 +461,15 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                     path = '/chunks.m3u8?nimblesessionid={0}&&wmsAuthSign={1}'.format(nimble_session_id,
                                                                                       smooth_streams_hash)
 
-            response_status_code, response_text = SmoothStreamsProxyHTTPRequestHandler._download_chunks_m3u8(
+            (response_status_code, response_text) = SmoothStreamsProxyHTTPRequestHandler._download_chunks_m3u8(
                 path,
-                client_ip_address)
+                channel_number,
+                client_ip_address,
+                client_uuid)
 
             if response_status_code == requests.codes.ok:
                 self._send_http_response(client_ip_address,
+                                         client_uuid,
                                          path,
                                          response_status_code,
                                          SmoothStreamsProxyHTTPRequestHandler._prepare_response_headers(
@@ -459,12 +479,21 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
             else:
                 self.send_error(response_status_code)
         elif path.find('.ts') != -1:
-            response_status_code, response_content = SmoothStreamsProxyHTTPRequestHandler._download_ts_file(
+            (channel_number, client_uuid) = \
+                SmoothStreamsProxyHTTPRequestHandler._parse_query_string(path, {'channel_number': None,
+                                                                                'client_uuid': None})
+
+            SmoothStreamsProxy.refresh_serviceable_clients(client_uuid, client_ip_address)
+
+            (response_status_code, response_content) = SmoothStreamsProxyHTTPRequestHandler._download_ts_file(
                 path,
-                client_ip_address)
+                channel_number,
+                client_ip_address,
+                client_uuid)
 
             if response_status_code == requests.codes.ok:
                 self._send_http_response(client_ip_address,
+                                         client_uuid,
                                          path,
                                          response_status_code,
                                          SmoothStreamsProxyHTTPRequestHandler._prepare_response_headers(
@@ -544,7 +573,7 @@ class SmoothStreamsProxyConfigurationEventHandler(FileSystemEventHandler):
                         pass
 
 
-class SmoothStreamsProxy:
+class SmoothStreamsProxy():
     _channel_map = {}
     _channel_map_lock = threading.Lock()
     _configuration = {}
@@ -970,6 +999,7 @@ class SmoothStreamsProxy:
         try:
             channel_map = {}
             playlist_m3u8 = []
+            client_uuid = uuid.uuid4()
 
             for channel_key in channels_json:
                 channel = channels_json[channel_key]
@@ -987,7 +1017,7 @@ class SmoothStreamsProxy:
                     'tvg-name="{3}" '
                     'tvg-logo="http://speed.guide.smoothstreams.tv/assets/images/channels/{2}.png" '
                     'channel-id="{2}",{3}\n'
-                    'http://{4}:{5}/playlist.m3u8?channel_number={6:02}&protocol={7}\n'.format(
+                    'http://{4}:{5}/playlist.m3u8?channel_number={6:02}&client_uuid={7}&protocol={8}\n'.format(
                         group_title,
                         tvg_id,
                         channel_number,
@@ -995,6 +1025,7 @@ class SmoothStreamsProxy:
                         cls._configuration['SERVER_HOST'],
                         cls._configuration['SERVER_PORT'],
                         int(channel_number),
+                        '{0}'.format(client_uuid),
                         protocol))
 
             cls._set_channel_map(channel_map)
@@ -1043,9 +1074,9 @@ class SmoothStreamsProxy:
             return cls._nimble_session_id_map.get(hijacked_nimble_session_id, None)
 
     @classmethod
-    def get_serviceable_client_parameter(cls, client_ip_address, parameter_name):
+    def get_serviceable_client_parameter(cls, client_uuid, parameter_name):
         with cls._serviceable_clients_lock:
-            return cls._serviceable_clients[client_ip_address][parameter_name]
+            return cls._serviceable_clients[client_uuid][parameter_name]
 
     @classmethod
     def get_session_parameter(cls, parameter_name):
@@ -1256,14 +1287,15 @@ class SmoothStreamsProxy:
                 logger.info('LOGGING_LEVEL = {0}'.format(cls._configuration['LOGGING_LEVEL']))
 
     @classmethod
-    def refresh_serviceable_clients(cls, client_ip_address):
+    def refresh_serviceable_clients(cls, client_uuid, client_ip_address):
         with cls._serviceable_clients_lock:
-            if client_ip_address not in cls._serviceable_clients:
-                logger.debug('Adding {0} to serviceable clients'.format(client_ip_address))
+            if client_uuid not in cls._serviceable_clients:
+                logger.debug('Adding {0}/{1} to serviceable clients'.format(client_ip_address, client_uuid))
 
-                cls._serviceable_clients[client_ip_address] = {}
+                cls._serviceable_clients[client_uuid] = {}
+                cls._serviceable_clients[client_uuid]['ip_address'] = client_ip_address
             else:
-                cls._serviceable_clients[client_ip_address]['last_request_date_time'] = datetime.now(pytz.utc)
+                cls._serviceable_clients[client_uuid]['last_request_date_time'] = datetime.now(pytz.utc)
 
     @classmethod
     def refresh_session(cls):
@@ -1298,9 +1330,9 @@ class SmoothStreamsProxy:
             handler.setLevel(log_level)
 
     @classmethod
-    def set_serviceable_client_parameter(cls, client_ip_address, parameter_name, parameter_value):
+    def set_serviceable_client_parameter(cls, client_uuid, parameter_name, parameter_value):
         with cls._serviceable_clients_lock:
-            cls._serviceable_clients[client_ip_address][parameter_name] = parameter_value
+            cls._serviceable_clients[client_uuid][parameter_name] = parameter_value
 
     @classmethod
     def start(cls, number_of_threads):
