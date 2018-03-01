@@ -4,7 +4,6 @@ import configparser
 import gzip
 import json
 import logging.handlers
-import logging.handlers
 import os
 import pprint
 import random
@@ -361,6 +360,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                             channel_number)
 
                         self._send_http_response(client_ip_address,
+                                                 None,
                                                  path,
                                                  requests.codes.OK,
                                                  SmoothStreamsProxyHTTPRequestHandler._prepare_response_headers(
@@ -407,6 +407,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
             epg = SmoothStreamsProxy.get_file_contents(channels_file_name)
             self._send_http_response(client_ip_address,
+                                     None,
                                      path,
                                      requests.codes.OK,
                                      SmoothStreamsProxyHTTPRequestHandler._prepare_response_headers(
