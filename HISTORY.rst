@@ -3,7 +3,12 @@
 Release History
 ===============
 
-1.2.0 (2018-28-02)
+1.2.1 (01-03-2018)
+------------------
+
+* Code refactoring and various bug fixes
+
+1.2.0 (28-02-2018)
 ------------------
 
 * Added nimble session "hijacking"
@@ -17,7 +22,7 @@ Release History
     (nimblesessionid & wmsAuthSign) to valid values
 * Code refactoring and various bug fixes
 
-1.1.0 (2018-27-02)
+1.1.0 (27-02-2018)
 ------------------
 
 * Added validations when parsing the configuration file along with error messages
@@ -28,7 +33,7 @@ Release History
 * Added functionality to obfuscate/encrypt the password in the configuration file following the first run
 * Lots of refactoring and various bug fixes
 
-1.0.0 (2018-24-02)
+1.0.0 (24-02-2018)
 ------------------
 
 * First public release
