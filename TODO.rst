@@ -1,3 +1,2 @@
 - Handle 403 error (Refresh session + Handle exceptions in Refresh session)
-- Write files downloaded to disk and flush from memory
 - Recording and playback
