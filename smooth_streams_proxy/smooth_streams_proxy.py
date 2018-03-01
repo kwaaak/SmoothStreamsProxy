@@ -37,7 +37,7 @@ VALID_SMOOTH_STREAMS_SERVER_VALUES = ['dap', 'deu', 'deu-de', 'deu-nl', 'deu-nl1
                                       'dnae3', 'dnae4', 'dnae6', 'dnaw', 'dnaw1', 'dnaw2', 'dnaw3', 'dnaw4x'
                                       ]
 VALID_SMOOTH_STREAMS_SERVICE_VALUES = ['view247', 'viewmmasr', 'viewss', 'viewstvn']
-VERSION = '1.2.0'
+VERSION = '1.2.1'
 
 logger = logging.getLogger(__name__)
 
@@ -354,7 +354,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                     (response_status_code, channels_json) = SmoothStreamsProxy.get_file_contents('channels.json')
 
                     if response_status_code == requests.codes.OK:
-                        playlist_m3u8 = SmoothStreamsProxy.generate_playlist_m3u8(channels_json, protocol)
+                        playlist_m3u8 = SmoothStreamsProxy.generate_playlist_m3u8(json.loads(channels_json), protocol)
 
                         self._send_http_response(client_ip_address,
                                                  None,
