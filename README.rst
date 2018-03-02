@@ -1,3 +1,3 @@
 SmoothStreamsProxy
 ==================
-SmoothStreamsProxy is a playlist generator SmoothStreams written in Python 3
+SmoothStreamsProxy is a playlist generator for SmoothStreams written in Python 3
