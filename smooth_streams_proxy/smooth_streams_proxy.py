@@ -11,6 +11,7 @@ import shelve
 import socket
 import sys
 import threading
+import traceback
 import urllib.parse
 import uuid
 from datetime import datetime
@@ -321,11 +322,12 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                             '#EXTINF:-1 ,{0}\n' \
                                             'rtmp://{1}.smoothstreams.tv:3635/{2}?wmsAuthSign={3}/ch{4}q1.stream' \
                                             ''.format(
-                                SmoothStreamsProxy.get_channel_name(int(channel_number)),
-                                SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
-                                SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVICE'),
-                                smooth_streams_hash,
-                                channel_number)
+                                                SmoothStreamsProxy.get_channel_name(int(channel_number)),
+                                                SmoothStreamsProxy.get_configuration_parameter('SMOOTH_STREAMS_SERVER'),
+                                                SmoothStreamsProxy.get_configuration_parameter(
+                                                    'SMOOTH_STREAMS_SERVICE'),
+                                                smooth_streams_hash,
+                                                channel_number)
 
                             self._send_http_response(client_ip_address,
                                                      None,
@@ -481,7 +483,8 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
                 return
         except Exception:
-            logger.error('Exception thrown', exc_info=True)
+            (type_, value_, traceback_) = sys.exc_info()
+            logger.error('\n'.join(traceback.format_exception(type_, value_, traceback_)))
 
             self.send_error(requests.codes.INTERNAL_SERVER_ERROR)
 
@@ -659,7 +662,9 @@ class SmoothStreamsProxy():
         response_status_code = response.status_code
         if response_status_code == requests.codes.OK:
             response_headers = response.headers
-            response_content = response.content if file_name.endswith('.gz') else response.json()
+            response_content = response.content if file_name.endswith('.gz') else json.dumps(response.json(),
+                                                                                             sort_keys=True,
+                                                                                             indent=2)
 
             logger.trace(
                 'Response from {0}:\n'
@@ -683,15 +688,9 @@ class SmoothStreamsProxy():
                 current_date_time_in_utc.strftime('%Y%m%d%H%M%S'),
                 file_name[:-3] if file_name.endswith('.gz') else file_name))
             with open(file_path, 'w') as out_file:
-                if file_name.endswith('.gz'):
-                    out_file.write(response_content)
+                out_file.write(response_content)
 
-                    logger.debug('EPG written to {0}'.format(file_path))
-                else:
-                    out_file.write(json.dumps(response_content, sort_keys=True, indent=2))
-
-                    logger.debug(
-                        'Channels written to {0}'.format(os.path.join(os.getcwd(), 'logs', 'channels.json')))
+                logger.debug('{0} written to {1}'.format(file_name, file_path))
 
             if file_name in cls._files_map:
                 try:
