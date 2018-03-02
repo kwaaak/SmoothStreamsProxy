@@ -3,6 +3,12 @@
 Release History
 ===============
 
+1.2.2 (02-03-2018)
+------------------
+* Fixed a bug where the channel_number and client_uuid were not being added to the chunks.m3u8 link after hijacking the Nimble session
+* Fixed a bug where the watchdog path being monitored for configuration file modifications was always set to the script's current working directory. Now the watchdog path being monitored is the full path to the parent folder of the configuration file
+* Significant refactoring and various other minor bug fixes
+
 1.2.1 (01-03-2018)
 ------------------
 
