@@ -1,3 +1,4 @@
+import argparse
 import base64
 import binascii
 import configparser
@@ -38,7 +39,7 @@ VALID_SMOOTH_STREAMS_SERVER_VALUES = ['dap', 'deu', 'deu-de', 'deu-nl', 'deu-nl1
                                       'dnae3', 'dnae4', 'dnae6', 'dnaw', 'dnaw1', 'dnaw2', 'dnaw3', 'dnaw4x'
                                       ]
 VALID_SMOOTH_STREAMS_SERVICE_VALUES = ['view247', 'viewmmasr', 'viewss', 'viewstvn']
-VERSION = '1.2.2'
+VERSION = '1.2.3'
 
 logger = logging.getLogger(__name__)
 
@@ -306,6 +307,7 @@ class SmoothStreamsProxy():
     _channel_map = {}
     _channel_map_lock = threading.Lock()
     _configuration = {}
+    _configuration_file = None
     _configuration_lock = threading.Lock()
     _epg_source_urls = ['https://sstv.fog.pt/epg', 'http://ca.epgrepo.download', 'http://eu.epgrepo.download']
     _fernet_key = None
@@ -320,7 +322,6 @@ class SmoothStreamsProxy():
     _serviceable_clients_lock = threading.Lock()
     _session = {}
     _session_lock = threading.Lock()
-    _configuration_file = None
 
     @classmethod
     def _cleanup_shelf(cls):
@@ -1353,14 +1354,31 @@ class SmoothStreamsProxy():
             cls._serviceable_clients[client_uuid][parameter_name] = parameter_value
 
     @classmethod
+    def _parse_command_line_arguments(cls):
+        parser = argparse.ArgumentParser()
+
+        parser.add_argument('-c',
+                            action='store',
+                            default='smooth_streams_proxy.ini',
+                            dest='configuration_file_path',
+                            help='path to the configuration file',
+                            metavar='configuration file path')
+        parser.add_argument('-l',
+                            action='store',
+                            default='logs/smooth_streams_proxy.log',
+                            dest='log_file_path',
+                            help='path to the log file',
+                            metavar='log file path')
+
+        arguments = parser.parse_args()
+
+        return (arguments.configuration_file_path, arguments.log_file_path)
+
+    @classmethod
     def start(cls, number_of_threads):
-        cls._configuration_file = os.path.join(os.getcwd(), 'smooth_streams_proxy.ini')
-        cls._log_file = os.path.join(os.getcwd(), 'logs', 'smooth_streams_proxy.log')
-        if len(sys.argv) == 2:
-            cls._configuration_file = os.path.abspath(sys.argv[1])
-        elif len(sys.argv) == 3:
-            cls._configuration_file = os.path.abspath(sys.argv[1])
-            cls._log_file = os.path.abspath(sys.argv[2])
+        (configuration_file_path, log_file_path) = cls._parse_command_line_arguments()
+        cls._configuration_file = os.path.abspath(configuration_file_path)
+        cls._log_file = os.path.abspath(log_file_path)
 
         cls._initialize_logging()
 

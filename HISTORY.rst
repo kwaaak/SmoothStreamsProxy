@@ -3,6 +3,9 @@
 Release History
 ===============
 
+1.2.3 (03-03-2018)
+* Improve parsing of command line arguments
+
 1.2.2 (02-03-2018)
 ------------------
 * Fixed a bug where the channel_number and client_uuid were not being added to the chunks.m3u8 link after hijacking the Nimble session
