@@ -3,7 +3,7 @@
 *.dir
 *.pyc
 .idea/*
-Python36-64/
+Python*/
 cache/
 conf/
 dist/
