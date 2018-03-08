@@ -1038,6 +1038,11 @@ class SmoothStreamsProxy():
             logger.debug('Shelf file {0} does not exists. Nothing to cleanup'.format(shelf_file_path))
 
     @classmethod
+    def _clear_nimble_session_id_map(cls):
+        with cls._nimble_session_id_map_lock:
+            cls._nimble_session_id_map = {}
+
+    @classmethod
     def _decrypt_password(cls):
         with cls._configuration_lock:
             return Fernet(cls._fernet_key).decrypt(cls._configuration['SMOOTH_STREAMS_PASSWORD'].encode())
@@ -1320,9 +1325,11 @@ class SmoothStreamsProxy():
                                         headers=headers,
                                         cookies=cookies,
                                         timeout=timeout)
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
             (type_, value_, traceback_) = sys.exc_info()
             logger.error('\n'.join(traceback.format_exception(type_, value_, traceback_)))
+
+            raise e
 
     @classmethod
     def _manage_password(cls):
@@ -1382,20 +1389,20 @@ class SmoothStreamsProxy():
 
     @classmethod
     def _process_authorization_hash(cls, hash_response):
-        if 'code' in hash_response and hash_response['code'] == '1':
-            cls._session['hash'] = hash_response['hash']
-            cls._session['expires_on'] = datetime.now(pytz.utc) + timedelta(
-                seconds=(hash_response['valid'] * 60))
+        if 'code' in hash_response:
+            if hash_response['code'] == '0':
+                logger.error('Failed to retrieved authorization token:\nError => {0}'.format(hash_response['error']))
+            elif hash_response['code'] == '1':
+                cls._session['hash'] = hash_response['hash']
+                cls._session['expires_on'] = datetime.now(pytz.utc) + timedelta(seconds=(hash_response['valid'] * 60))
 
-            logger.info('Retrieved authorization token:\nHash => {0}\nExpires On => {1}'.format(
-                cls._session['hash'],
-                cls._session['expires_on'].astimezone(get_localzone()).strftime('%Y-%m-%d %H:%M:%S')[:-3]))
+                logger.info('Retrieved authorization token:\nHash => {0}\nExpires On => {1}'.format(
+                    cls._session['hash'],
+                    cls._session['expires_on'].astimezone(get_localzone()).strftime('%Y-%m-%d %H:%M:%S')[:-3]))
 
-            cls._persist_to_shelf('session', cls._session)
-
-            return requests.codes.OK
+                cls._persist_to_shelf('session', cls._session)
         else:
-            return requests.codes.FORBIDDEN
+            logger.error('Failed to retrieved authorization token:\ncode not in response')
 
     @classmethod
     def _refresh_serviceable_clients(cls, client_uuid, client_ip_address):
@@ -1417,7 +1424,11 @@ class SmoothStreamsProxy():
             if cls._do_retrieve_authorization_hash():
                 do_start_timer = True
 
+                cls._clear_nimble_session_id_map()
+
                 response_status_code = cls._retrieve_authorization_hash()
+                if response_status_code != requests.codes.OK:
+                    do_start_timer = False
 
                 if cls._refresh_session_timer:
                     cls._refresh_session_timer.cancel()
@@ -1474,29 +1485,28 @@ class SmoothStreamsProxy():
             cookies=session.cookies.get_dict())
 
         response_status_code = response.status_code
-
-        if response.status_code == requests.codes.OK:
+        if response_status_code == requests.codes.OK:
             cls._session['http_session'] = session
+        elif response_status_code != requests.codes.NOT_FOUND:
+            logger.error('HTTP error {0} encountered requesting {1}'.format(response_status_code, url))
 
-            response_headers = response.headers
+            return response_status_code
 
-            # noinspection PyUnresolvedReferences
-            logger.trace(
-                'Response from {0}:\n'
-                '[Status Code]\n=============\n{1}\n\n'
-                '[Header]\n========\n{2}\n\n'
-                '[Content]\n=========\n{3}\n'.format(url, response_status_code,
-                                                     '\n'.join(
-                                                         ['{0:32} => {1!s}'.format(key, response_headers[key])
-                                                          for key in sorted(response_headers)]),
-                                                     json.dumps(response.json(), sort_keys=True,
-                                                                indent=2)))
+        response_headers = response.headers
+        response_json = response.json()
 
-            response_status_code = cls._process_authorization_hash(response.json())
-        else:
-            logger.error(
-                'HTTP error {0} encountered requesting {1}'.format(response_status_code,
-                                                                   url))
+        # noinspection PyUnresolvedReferences
+        logger.trace(
+            'Response from {0}:\n'
+            '[Status Code]\n=============\n{1}\n\n'
+            '[Header]\n========\n{2}\n\n'
+            '[Content]\n=========\n{3}\n'.format(url, response_status_code,
+                                                 '\n'.join(
+                                                     ['{0:32} => {1!s}'.format(key, response_headers[key])
+                                                      for key in sorted(response_headers)]),
+                                                 json.dumps(response_json, sort_keys=True, indent=2)))
+
+        cls._process_authorization_hash(response_json)
 
         return response_status_code
 
