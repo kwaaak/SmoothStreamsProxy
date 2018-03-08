@@ -62,9 +62,11 @@ class PasswordState(Enum):
 
 
 class Recording():
-    __slots__ = ['_channel_number', '_end_date_time_in_utc', '_program_title', '_start_date_time_in_utc']
+    __slots__ = ['_base_recording_directory', '_channel_number', '_end_date_time_in_utc', '_program_title',
+                 '_start_date_time_in_utc']
 
     def __init__(self, channel_number, end_date_time_in_utc, program_title, start_date_time_in_utc):
+        self._base_recording_directory = None
         self._channel_number = channel_number
         self._end_date_time_in_utc = end_date_time_in_utc
         self._program_title = program_title
@@ -89,6 +91,14 @@ class Recording():
              self.__slots__]) + ')'
 
     @property
+    def base_recording_directory(self):
+        return self._base_recording_directory
+
+    @base_recording_directory.setter
+    def base_recording_directory(self, base_recording_directory):
+        self._base_recording_directory = base_recording_directory
+
+    @property
     def channel_number(self):
         return self._channel_number
 
@@ -109,9 +119,9 @@ class SmoothStreamsProxyRecordingThread(threading.Thread):
     def __init__(self, recording):
         threading.Thread.__init__(self)
 
-        self._recording = recording
-        self._base_recording_directory = None
         self._id = uuid.uuid4()
+        self._recording = recording
+        self._recording_directory_path = None
 
         self._stop_recording_event = threading.Event()
         self._stop_recording_timer = threading.Timer(
@@ -122,48 +132,45 @@ class SmoothStreamsProxyRecordingThread(threading.Thread):
         self.start()
 
     def _create_recording_directory_tree(self):
+        recording_directory_suffix_counter = 0
+        recording_directory_suffix = ''
+
         did_make_directory = False
-
-        base_recording_directory = os.path.join(SmoothStreamsProxy.get_recordings_path(), self._recording.program_title)
-        if not os.path.exists(base_recording_directory):
-            logger.debug('Creating recording directory tree\nPath => {0}'.format(base_recording_directory))
-
-            try:
-                os.makedirs(base_recording_directory)
-                os.makedirs(os.path.join(base_recording_directory, 'playlist'))
-                os.makedirs(os.path.join(base_recording_directory, 'segments'))
-
-                did_make_directory = True
-                self._base_recording_directory = base_recording_directory
-
-                logger.debug('Created recording directory tree\nPath => {0}'.format(base_recording_directory))
-            except OSError:
-                logger.error('Failed to create recording directory tree\nPath => {0}'.format(base_recording_directory))
-
-        directory_name_suffix = 1
-
         while not did_make_directory:
-            suffixed_recording_directory = '{0}_{1}'.format(base_recording_directory, directory_name_suffix)
-            if os.path.exists(suffixed_recording_directory):
-                directory_name_suffix += 1
+            # base64.urlsafe_b64encode() the base directory. This results in a valid directory name on any OS at the
+            # expense of human readability.
+            recording_directory_path = os.path.join(SmoothStreamsProxy.get_recordings_directory_path(),
+                                                    base64.urlsafe_b64encode('{0}{1}'.format(
+                                                        self._recording.program_title,
+                                                        recording_directory_suffix).encode()).decode())
+            if os.path.exists(recording_directory_path):
+                recording_directory_suffix_counter += 1
+                recording_directory_suffix = '_{0}'.format(recording_directory_suffix_counter)
             else:
-                logger.debug('Creating recording directory tree\nPath => {0}'.format(suffixed_recording_directory))
+                logger.debug('Creating recording directory tree for {0}\nPath => {1}'.format(
+                    self._recording.program_title, recording_directory_path))
 
                 try:
-                    os.makedirs(suffixed_recording_directory)
-                    os.makedirs(os.path.join(suffixed_recording_directory, 'playlist'))
-                    os.makedirs(os.path.join(suffixed_recording_directory, 'segments'))
+                    os.makedirs(recording_directory_path)
+                    os.makedirs(os.path.join(recording_directory_path, 'playlist'))
+                    os.makedirs(os.path.join(recording_directory_path, 'segments'))
 
                     did_make_directory = True
-                    self._base_recording_directory = suffixed_recording_directory
+                    self._recording_directory_path = recording_directory_path
+                    self._recording.base_recording_directory = os.path.split(recording_directory_path)[-1]
 
-                    logger.debug('Created recording directory tree\nPath => {0}'.format(suffixed_recording_directory))
+                    logger.debug('Created recording directory tree for {0}\nPath => {1}'.format(
+                        self._recording.program_title, recording_directory_path))
                 except OSError:
                     logger.error(
-                        'Failed to create recording directory tree\nPath => {0}'.format(suffixed_recording_directory))
+                        'Failed to create recording directory tree for {0}\nPath => {1}'.format(
+                            self._recording.program_title, recording_directory_path))
+
+                    recording_directory_suffix_counter += 1
+                    recording_directory_suffix = '_{0}'.format(recording_directory_suffix_counter)
 
     def _save_manifest_file(self, actual_end_date_time_in_utc, actual_start_date_time_in_utc, playlist_file, status):
-        manifest_file_path = os.path.join(self._base_recording_directory, '.MANIFEST')
+        manifest_file_path = os.path.join(self._recording_directory_path, '.MANIFEST')
 
         try:
             with open(manifest_file_path, 'w') as out_file:
@@ -172,11 +179,12 @@ class SmoothStreamsProxyRecordingThread(threading.Thread):
                     {'actual_end_date_time_in_utc': actual_end_date_time_in_utc,
                      'actual_start_date_time_in_utc': actual_start_date_time_in_utc,
                      'channel_name': SmoothStreamsProxy.get_channel_name(int(self._recording.channel_number)),
+                     'base_recording_directory': self._recording.base_recording_directory,
                      'channel_number': self._recording.channel_number,
-                     'playlist_directory': os.path.join(self._base_recording_directory, 'playlist'),
+                     'playlist_directory': os.path.join(self._recording_directory_path, 'playlist'),
                      'playlist_file': playlist_file,
                      'program_title': self._recording.program_title,
-                     'segments_directory': os.path.join(self._base_recording_directory, 'segments'),
+                     'segments_directory': os.path.join(self._recording_directory_path, 'segments'),
                      'scheduled_end_date_time_in_utc': self._recording.end_date_time_in_utc.strftime(
                          '%Y-%m-%d %H:%M:%S%z'),
                      'scheduled_start_date_time_in_utc': self._recording.start_date_time_in_utc.strftime(
@@ -192,7 +200,7 @@ class SmoothStreamsProxyRecordingThread(threading.Thread):
             logger.error('\n'.join(traceback.format_exception(type_, value_, traceback_)))
 
     def _save_playlist_file(self, playlist_file_name, playlist_file_content):
-        playlist_file_path = os.path.join(self._base_recording_directory, 'playlist', playlist_file_name)
+        playlist_file_path = os.path.join(self._recording_directory_path, 'playlist', playlist_file_name)
 
         try:
             with open(playlist_file_path, 'w') as out_file:
@@ -204,7 +212,7 @@ class SmoothStreamsProxyRecordingThread(threading.Thread):
             logger.error('\n'.join(traceback.format_exception(type_, value_, traceback_)))
 
     def _save_segment_file(self, segment_file_name, segments_file_content):
-        segment_file_path = os.path.join(self._base_recording_directory, 'segments', segment_file_name)
+        segment_file_path = os.path.join(self._recording_directory_path, 'segments', segment_file_name)
 
         try:
             with open(segment_file_path, 'wb') as out_file:
@@ -330,7 +338,7 @@ class SmoothStreamsProxyRecordingThread(threading.Thread):
                             segment.uri = '{0}?client_uuid={1}&program_title={2}'.format(
                                 segment_file_name,
                                 client_uuid,
-                                urllib.parse.quote(self._recording.program_title))
+                                urllib.parse.quote(self._recording.base_recording_directory))
 
                             if segment not in vod_playlist_m3u8_object.segments:
                                 vod_playlist_m3u8_object.segments.append(segment)
@@ -707,7 +715,10 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                                                                              {'client_uuid': None,
                                                                                               'program_title': None})
 
-                        logger.info('{0} requested from {1}/{2}'.format(program_title, client_ip_address, client_uuid))
+                        logger.info('{0} requested from {1}/{2}'.format(
+                            base64.urlsafe_b64decode(program_title.encode()).decode(),
+                            client_ip_address,
+                            client_uuid))
 
                         vod_playlist_m3u8_content = SmoothStreamsProxy.read_vod_playlist_m3u8(program_title)
                         if vod_playlist_m3u8_content:
@@ -865,7 +876,7 @@ class SmoothStreamsProxyConfigurationEventHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         with SmoothStreamsProxyConfigurationEventHandler._lock:
-            configuration_file = SmoothStreamsProxy.get_configuration_file()
+            configuration_file = SmoothStreamsProxy.get_configuration_file_path()
             if event.src_path == configuration_file:
                 read_configuration_file = False
                 last_modification_date_time = SmoothStreamsProxyConfigurationEventHandler._last_modification_date_time
@@ -905,17 +916,17 @@ class SmoothStreamsProxy():
     _channel_map = {}
     _channel_map_lock = threading.RLock()
     _configuration = {}
-    _configuration_file = None
+    _configuration_file_path = None
     _configuration_lock = threading.RLock()
     _epg_source_urls = ['https://sstv.fog.pt/epg', 'http://ca.epgrepo.download', 'http://eu.epgrepo.download']
     _fernet_key = None
     _files_map = {}
     _files_map_lock = threading.RLock()
     _http_request_handler_threads = None
-    _log_file = None
+    _log_file_path = None
     _nimble_session_id_map = {}
     _nimble_session_id_map_lock = threading.RLock()
-    _recordings_path = None
+    _recordings_directory_path = None
     _refresh_session_timer = None
     _scheduled_recordings = []
     _scheduled_recordings_lock = threading.RLock()
@@ -1172,7 +1183,7 @@ class SmoothStreamsProxy():
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
 
-        rotating_file_handler = logging.handlers.RotatingFileHandler('{0}'.format(cls._log_file),
+        rotating_file_handler = logging.handlers.RotatingFileHandler('{0}'.format(cls._log_file_path),
                                                                      maxBytes=1024 * 1024 * 10,
                                                                      backupCount=10)
         rotating_file_handler.setFormatter(formatter)
@@ -1324,7 +1335,7 @@ class SmoothStreamsProxy():
                 logger.debug(
                     'SmoothStreams password is encrypted, but no decryption key was found\n'
                     'Please re-enter your cleartext password in the configuration file {0}\n'
-                    'Exiting...'.format(cls._configuration_file))
+                    'Exiting...'.format(cls._configuration_file_path))
 
                 sys.exit()
 
@@ -1559,15 +1570,15 @@ class SmoothStreamsProxy():
     def _update_configuration_file(cls, section, option, value):
         with cls._configuration_lock:
             configuration = configparser.RawConfigParser()
-            configuration.read(cls._configuration_file)
+            configuration.read(cls._configuration_file_path)
 
             configuration.set(section, option, value)
 
-            with open(cls._configuration_file, 'w') as configuration_file:
+            with open(cls._configuration_file_path, 'w') as configuration_file:
                 configuration.write(configuration_file)
 
                 logger.debug('Updated configuration file {0}\nSection => {1}\nOption  => {2}\nValue  => {3}'.format(
-                    cls._configuration_file, section, option, value))
+                    cls._configuration_file_path, section, option, value))
 
     @classmethod
     def _validate_fernet_key(cls):
@@ -1579,7 +1590,7 @@ class SmoothStreamsProxy():
             logger.debug(
                 'Decryption key loaded is not valid for the encrypted SmoothStreams password\n'
                 'Please re-enter your cleartext password in the configuration file {0}\n'
-                'Exiting...'.format(cls._configuration_file))
+                'Exiting...'.format(cls._configuration_file_path))
 
             cls._remove_from_shelf('fernet_key')
 
@@ -1881,11 +1892,10 @@ class SmoothStreamsProxy():
         playlist_m3u8 = []
         client_uuid = '{0}'.format(uuid.uuid4())
 
-        persistent_recordings = cls.get_persistent_recordings()
-        for persistent_recording in persistent_recordings:
+        for persistent_recording in cls.get_persistent_recordings():
             playlist_m3u8.append(
                 '#EXTINF:-1,{0} - [{1} - {2}]\n'
-                'http://{3}:{4}/vod/playlist.m3u8?client_uuid={5}&program_title={6}'.format(
+                'http://{3}:{4}/vod/playlist.m3u8?client_uuid={5}&program_title={6}\n'.format(
                     persistent_recording.program_title,
                     persistent_recording.start_date_time_in_utc.astimezone(get_localzone()).strftime(
                         '%Y-%m-%d %H:%M:%S%z'),
@@ -1894,7 +1904,7 @@ class SmoothStreamsProxy():
                     cls._configuration['SERVER_HOST'],
                     cls._configuration['SERVER_PORT'],
                     client_uuid,
-                    urllib.parse.quote(persistent_recording.program_title)))
+                    urllib.parse.quote(persistent_recording.base_recording_directory)))
 
         if playlist_m3u8:
             playlist_m3u8 = '#EXTM3U\n{0}'.format(''.join(playlist_m3u8))
@@ -1917,8 +1927,8 @@ class SmoothStreamsProxy():
                 channel_number)
 
     @classmethod
-    def get_configuration_file(cls):
-        return cls._configuration_file
+    def get_configuration_file_path(cls):
+        return cls._configuration_file_path
 
     @classmethod
     def get_configuration_parameter(cls, parameter_name):
@@ -1964,35 +1974,34 @@ class SmoothStreamsProxy():
         persistent_recordings = []
 
         recordings_top_level_directory = [recording_top_level_directory for recording_top_level_directory in
-                                          os.listdir(cls._recordings_path)
-                                          if os.path.isdir(os.path.join(cls._recordings_path,
+                                          os.listdir(cls._recordings_directory_path)
+                                          if os.path.isdir(os.path.join(cls._recordings_directory_path,
                                                                         recording_top_level_directory))]
         if recordings_top_level_directory:
             for recording_top_level_directory in recordings_top_level_directory:
                 try:
-                    with open(os.path.join(cls._recordings_path,
-                                           recording_top_level_directory,
-                                           '.MANIFEST'),
-                              'r') as in_file:
+                    recording_top_level_directory_path = os.path.join(cls._recordings_directory_path,
+                                                                      recording_top_level_directory,
+                                                                      '.MANIFEST')
+                    with open(recording_top_level_directory_path, 'r') as in_file:
                         recording_manifest = json.load(in_file)
                         if recording_manifest['status'] == 'Completed':
-                            persistent_recordings.append(Recording(recording_manifest['channel_number'],
-                                                                   datetime.strptime(recording_manifest[
-                                                                                         'actual_end_date_time_in_utc'],
-                                                                                     '%Y-%m-%d %H:%M:%S%z'),
-                                                                   recording_manifest['program_title'],
-                                                                   datetime.strptime(
-                                                                       recording_manifest[
-                                                                           'actual_start_date_time_in_utc'],
-                                                                       '%Y-%m-%d %H:%M:%S%z')))
+                            recording = Recording(recording_manifest['channel_number'],
+                                                  datetime.strptime(recording_manifest['actual_end_date_time_in_utc'],
+                                                                    '%Y-%m-%d %H:%M:%S%z'),
+                                                  recording_manifest['program_title'],
+                                                  datetime.strptime(recording_manifest['actual_start_date_time_in_utc'],
+                                                                    '%Y-%m-%d %H:%M:%S%z'))
+                            recording.base_recording_directory = recording_manifest['base_recording_directory']
+                            persistent_recordings.append(recording)
                 except OSError:
                     logger.error('')
 
         return persistent_recordings
 
     @classmethod
-    def get_recordings_path(cls):
-        return cls._recordings_path
+    def get_recordings_directory_path(cls):
+        return cls._recordings_directory_path
 
     @classmethod
     def get_scheduled_recordings(cls):
@@ -2064,7 +2073,7 @@ class SmoothStreamsProxy():
     def read_configuration_file(cls, initial_read=True):
         with cls._configuration_lock:
             configuration = configparser.RawConfigParser()
-            configuration.read(cls._configuration_file)
+            configuration.read(cls._configuration_file_path)
 
             error_in_configuration_file = False
             error_messages = []
@@ -2198,7 +2207,7 @@ class SmoothStreamsProxy():
                 logging_level = 'INFO'
 
             if error_in_configuration_file:
-                error_messages.insert(0, 'Configuration file => {0}'.format(cls._configuration_file))
+                error_messages.insert(0, 'Configuration file => {0}'.format(cls._configuration_file_path))
                 error_messages.append('Exiting...') if initial_read else error_messages.append('Skipping...')
 
                 logger.error('\n'.join(error_messages))
@@ -2224,7 +2233,7 @@ class SmoothStreamsProxy():
                             'SMOOTH_STREAMS_PASSWORD => {7}\n'
                             'SMOOTH_STREAMS_PROTOCOL => {8}\n'
                             'LOGGING_LEVEL           => {9}'.format('R' if initial_read else 'Rer',
-                                                                    cls._configuration_file,
+                                                                    cls._configuration_file_path,
                                                                     cls._configuration['SERVER_HOST'],
                                                                     cls._configuration['SERVER_PORT'],
                                                                     cls._configuration['SMOOTH_STREAMS_SERVICE'],
@@ -2237,7 +2246,7 @@ class SmoothStreamsProxy():
     @classmethod
     def read_ts_file(cls, path, program_title):
         ts_file_content = None
-        ts_file_path = os.path.join(cls._recordings_path,
+        ts_file_path = os.path.join(cls._recordings_directory_path,
                                     program_title,
                                     'segments',
                                     re.sub(r'/vod/(.*)\?.*', r'\1', path))
@@ -2253,7 +2262,8 @@ class SmoothStreamsProxy():
     @classmethod
     def read_vod_playlist_m3u8(cls, program_title):
         vod_playlist_m3u8_content = None
-        vod_playlist_m3u8_file_path = os.path.join(cls._recordings_path, program_title, 'playlist', 'playlist.m3u8')
+        vod_playlist_m3u8_file_path = os.path.join(cls._recordings_directory_path, program_title, 'playlist',
+                                                   'playlist.m3u8')
 
         try:
             with open(vod_playlist_m3u8_file_path, 'r') as in_file:
@@ -2277,10 +2287,10 @@ class SmoothStreamsProxy():
 
     @classmethod
     def start(cls, number_of_threads):
-        (configuration_file_path, log_file_path, recordings_path) = cls._parse_command_line_arguments()
-        cls._configuration_file = os.path.abspath(configuration_file_path)
-        cls._log_file = os.path.abspath(log_file_path)
-        cls._recordings_path = os.path.abspath(recordings_path)
+        (configuration_file_path, log_file_path, recordings_directory_path) = cls._parse_command_line_arguments()
+        cls._configuration_file_path = os.path.abspath(configuration_file_path)
+        cls._log_file_path = os.path.abspath(log_file_path)
+        cls._recordings_directory_path = os.path.abspath(recordings_directory_path)
 
         cls._initialize_logging()
 
@@ -2302,7 +2312,7 @@ class SmoothStreamsProxy():
         smooth_streams_proxy_configuration_event_handler = SmoothStreamsProxyConfigurationEventHandler()
         watchdog_observer = Observer()
         watchdog_observer.schedule(smooth_streams_proxy_configuration_event_handler,
-                                   os.path.dirname(cls._configuration_file),
+                                   os.path.dirname(cls._configuration_file_path),
                                    recursive=False)
         watchdog_observer.start()
 
