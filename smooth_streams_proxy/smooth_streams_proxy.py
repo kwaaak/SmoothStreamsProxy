@@ -973,6 +973,12 @@ class SmoothStreamsProxy():
                                                            next_update_date_time.astimezone(
                                                                get_localzone()).strftime('%Y-%m-%d %H:%M:%S'))))
 
+                            try:
+                                os.remove(files_map[file_name][file_name]['source'])
+                            except OSError:
+                                (type_, value_, traceback_) = sys.exc_info()
+                                logger.error('\n'.join(traceback.format_exception(type_, value_, traceback_)))
+
                             del files_map[file_name]
                     smooth_streams_proxy_db['files_map'] = files_map
                 except KeyError:
@@ -1257,7 +1263,7 @@ class SmoothStreamsProxy():
             try:
                 cls._scheduled_recordings = smooth_streams_proxy_db['scheduled_recordings']
 
-                if len(cls._scheduled_recordings):
+                if cls._scheduled_recordings:
                     logger.debug(
                         'Loaded shelved scheduled recordings:\n{0}'.format(
                             '\n'.join([
@@ -1281,7 +1287,7 @@ class SmoothStreamsProxy():
             try:
                 cls._active_recordings = smooth_streams_proxy_db['active_recordings']
 
-                if len(cls._active_recordings):
+                if cls._active_recordings:
                     logger.debug('Loaded shelved active recordings:\n{0}'.format('\n'.join(
                         ['Channel name      => {0}\n'
                          'Channel number    => {1}\n'
