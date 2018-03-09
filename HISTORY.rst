@@ -3,6 +3,10 @@
 Release History
 ===============
 
+2.0.1 (09-03-2018)
+------------------
+* Various bug fixes
+
 2.0.0 (08-03-2018)
 ------------------
 * Added the ability to record and playback recorded streams through a VOD HLS playlist. At this point in time managing recordings is through plain REST calls.

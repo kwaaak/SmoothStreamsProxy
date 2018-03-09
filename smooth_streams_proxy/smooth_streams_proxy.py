@@ -43,7 +43,7 @@ VALID_SMOOTH_STREAMS_SERVER_VALUES = ['dap', 'deu', 'deu-de', 'deu-nl', 'deu-nl1
                                       'dnae3', 'dnae4', 'dnae6', 'dnaw', 'dnaw1', 'dnaw2', 'dnaw3', 'dnaw4x'
                                       ]
 VALID_SMOOTH_STREAMS_SERVICE_VALUES = ['view247', 'viewmmasr', 'viewss', 'viewstvn']
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 
 logger = logging.getLogger(__name__)
 
@@ -542,6 +542,10 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                                                                                     client_uuid,
                                                                                                     client_ip_address)
                     if response_status_code == requests.codes.OK:
+                        logger.debug('Sending back response for {0} from {1}/{2}'.format(path,
+                                                                                         client_ip_address,
+                                                                                         client_uuid))
+
                         self._send_http_response(client_ip_address,
                                                  client_uuid,
                                                  path,
@@ -934,16 +938,15 @@ class SmoothStreamsProxy():
     _serviceable_clients_lock = threading.RLock()
     _session = {}
     _session_lock = threading.RLock()
+    _shelf_file_path = None
     _start_recording_timer = None
 
     @classmethod
     def _cleanup_shelf(cls):
-        shelf_file_path = os.path.join(os.getcwd(), 'smooth_streams_proxy_db')
+        if os.path.exists(cls._shelf_file_path):
+            logger.debug('Cleaning up shelved settings from {0}'.format(cls._shelf_file_path))
 
-        if os.path.exists(shelf_file_path):
-            logger.debug('Cleaning up shelved settings from {0}'.format(shelf_file_path))
-
-            with shelve.open(shelf_file_path) as smooth_streams_proxy_db:
+            with shelve.open(cls._shelf_file_path) as smooth_streams_proxy_db:
                 try:
                     session = smooth_streams_proxy_db['session']
                     hash_expires_on = session['expires_on']
@@ -1041,7 +1044,7 @@ class SmoothStreamsProxy():
                     (type_, value_, traceback_) = sys.exc_info()
                     logger.error('\n'.join(traceback.format_exception(type_, value_, traceback_)))
         else:
-            logger.debug('Shelf file {0} does not exists. Nothing to cleanup'.format(shelf_file_path))
+            logger.debug('Shelf file {0} does not exists. Nothing to cleanup'.format(cls._shelf_file_path))
 
     @classmethod
     def _clear_nimble_session_id_map(cls):
@@ -1211,11 +1214,9 @@ class SmoothStreamsProxy():
 
     @classmethod
     def _load_shelved_settings(cls):
-        file_path = os.path.join(os.getcwd(), 'smooth_streams_proxy_db')
+        logger.debug('Attempting to load shelved settings from {0}'.format(cls._shelf_file_path))
 
-        logger.debug('Attempting to load shelved settings from {0}'.format(file_path))
-
-        with shelve.open(file_path) as smooth_streams_proxy_db:
+        with shelve.open(cls._shelf_file_path) as smooth_streams_proxy_db:
             try:
                 cls._session = smooth_streams_proxy_db['session']
 
@@ -1223,8 +1224,7 @@ class SmoothStreamsProxy():
                     cls._session['hash'],
                     cls._session['expires_on'].astimezone(get_localzone()).strftime('%Y-%m-%d %H:%M:%S')))
             except KeyError:
-                logger.debug('Failed to load shelved session from {0}'.format(os.path.join(os.getcwd(),
-                                                                                           'smooth_streams_proxy_db')))
+                logger.debug('Failed to load shelved session from {0}'.format(cls._shelf_file_path))
 
             try:
                 cls._files_map = smooth_streams_proxy_db['files_map']
@@ -1239,8 +1239,7 @@ class SmoothStreamsProxy():
                                     get_localzone()).strftime('%Y-%m-%d %H:%M:%S')) for file_name
                                 in sorted(cls._files_map)]).strip()))
             except KeyError:
-                logger.debug(
-                    'Failed to load files from {0}'.format(os.path.join(os.getcwd(), 'smooth_streams_proxy_db')))
+                logger.debug('Failed to load files from {0}'.format(cls._shelf_file_path))
 
             try:
                 cls._channel_map = smooth_streams_proxy_db['channel_map']
@@ -1249,16 +1248,14 @@ class SmoothStreamsProxy():
                     channel_number,
                     cls._channel_map[channel_number]) for channel_number in sorted(cls._channel_map)])))
             except KeyError:
-                logger.debug(
-                    'Failed to load channel map from {0}'.format(os.path.join(os.getcwd(), 'smooth_streams_proxy_db')))
+                logger.debug('Failed to load channel map from {0}'.format(cls._shelf_file_path))
 
             try:
                 cls._fernet_key = smooth_streams_proxy_db['fernet_key']
 
                 logger.debug('Loaded shelved decryption key')
             except KeyError:
-                logger.debug('Failed to load decryption key from {0}'.format(os.path.join(os.getcwd(),
-                                                                                          'smooth_streams_proxy_db')))
+                logger.debug('Failed to load decryption key from {0}'.format(cls._shelf_file_path))
 
             try:
                 cls._scheduled_recordings = smooth_streams_proxy_db['scheduled_recordings']
@@ -1280,9 +1277,7 @@ class SmoothStreamsProxy():
                                     recording.end_date_time_in_utc.astimezone(get_localzone()).strftime(
                                         '%Y-%m-%d %H:%M:%S')) for recording in cls._scheduled_recordings]).strip()))
             except KeyError:
-                logger.debug('Failed to load scheduled recordings from {0}'.format(os.path.join(
-                    os.getcwd(),
-                    'smooth_streams_proxy_db')))
+                logger.debug('Failed to load scheduled recordings from {0}'.format(cls._shelf_file_path))
 
             try:
                 cls._active_recordings = smooth_streams_proxy_db['active_recordings']
@@ -1302,9 +1297,7 @@ class SmoothStreamsProxy():
                             for
                             recording in cls._active_recordings]).strip()))
             except KeyError:
-                logger.debug('Failed to load active recordings from {0}'.format(os.path.join(
-                    os.getcwd(),
-                    'smooth_streams_proxy_db')))
+                logger.debug('Failed to load active recordings from {0}'.format(cls._shelf_file_path))
 
     @classmethod
     def _make_http_request(cls, requests_http_method, url, params=None, data=None, json_=None, headers=None,
@@ -1371,27 +1364,32 @@ class SmoothStreamsProxy():
         parser.add_argument('-r',
                             action='store',
                             default='recordings',
-                            dest='recordings_path',
+                            dest='recordings_directory_path',
                             help='path to the recordings folder',
                             metavar='recordings folder path')
+        parser.add_argument('-s',
+                            action='store',
+                            default='smooth_streams_proxy_db',
+                            dest='shelf_file_path',
+                            help='path to the shelf file',
+                            metavar='shelf file path')
 
         arguments = parser.parse_args()
 
-        return (arguments.configuration_file_path, arguments.log_file_path, arguments.recordings_path)
+        return (arguments.configuration_file_path, arguments.log_file_path, arguments.recordings_directory_path,
+                arguments.shelf_file_path)
 
     @classmethod
     def _persist_to_shelf(cls, key, value):
-        file_path = os.path.join(os.getcwd(), 'smooth_streams_proxy_db')
-
-        logger.debug('Attempting to persist {0} to {1}'.format(key, file_path))
+        logger.debug('Attempting to persist {0} to {1}'.format(key, cls._shelf_file_path))
 
         try:
-            with shelve.open(file_path) as smooth_streams_proxy_db:
+            with shelve.open(cls._shelf_file_path) as smooth_streams_proxy_db:
                 smooth_streams_proxy_db[key] = value
 
-                logger.debug('Persisted {0} to {1}'.format(key, file_path))
+                logger.debug('Persisted {0} to {1}'.format(key, cls._shelf_file_path))
         except OSError:
-            logger.debug('Failed to persist {0} to {1}'.format(key, file_path))
+            logger.debug('Failed to persist {0} to {1}'.format(key, cls._shelf_file_path))
 
     @classmethod
     def _process_authorization_hash(cls, hash_response):
@@ -1452,15 +1450,13 @@ class SmoothStreamsProxy():
 
     @classmethod
     def _remove_from_shelf(cls, key):
-        file_path = os.path.join(os.getcwd(), 'smooth_streams_proxy_db')
-
-        logger.debug('Attempting to remove {0} from {1}'.format(key, file_path))
+        logger.debug('Attempting to remove {0} from {1}'.format(key, cls._shelf_file_path))
 
         try:
-            with shelve.open(file_path) as smooth_streams_proxy_db:
+            with shelve.open(cls._shelf_file_path) as smooth_streams_proxy_db:
                 del smooth_streams_proxy_db[key]
         except IOError:
-            logger.debug('Failed to remove {0} from {1}'.format(key, file_path))
+            logger.debug('Failed to remove {0} from {1}'.format(key, cls._shelf_file_path))
 
     @classmethod
     def _restart_active_recording(cls):
@@ -1679,6 +1675,8 @@ class SmoothStreamsProxy():
             response_headers = response.headers
             response_text = response.text
 
+            logger.debug('Downloaded {0} from {1}/{2}'.format(path, client_ip_address, client_uuid, full_url))
+
             # noinspection PyUnresolvedReferences
             logger.trace(
                 'Response from {0}:\n'
@@ -1740,6 +1738,8 @@ class SmoothStreamsProxy():
             if response_status_code == requests.codes.OK:
                 response_headers = response.headers
                 response_text = response.text
+
+                logger.debug('Downloaded {0} from {1}/{2}'.format(path, client_ip_address, client_uuid, full_url))
 
                 # noinspection PyUnresolvedReferences
                 logger.trace(
@@ -1812,6 +1812,8 @@ class SmoothStreamsProxy():
         if response_status_code == requests.codes.OK:
             response_headers = response.headers
             response_content = response.content
+
+            logger.debug('Downloaded {0} from {1}/{2}'.format(path, client_ip_address, client_uuid, full_url))
 
             # noinspection PyUnresolvedReferences
             logger.trace(
@@ -2303,10 +2305,12 @@ class SmoothStreamsProxy():
 
     @classmethod
     def start(cls, number_of_threads):
-        (configuration_file_path, log_file_path, recordings_directory_path) = cls._parse_command_line_arguments()
+        (configuration_file_path, log_file_path, recordings_directory_path,
+         shelf_file_path) = cls._parse_command_line_arguments()
         cls._configuration_file_path = os.path.abspath(configuration_file_path)
         cls._log_file_path = os.path.abspath(log_file_path)
         cls._recordings_directory_path = os.path.abspath(recordings_directory_path)
+        cls._shelf_file_path = os.path.abspath(shelf_file_path)
 
         cls._initialize_logging()
 
