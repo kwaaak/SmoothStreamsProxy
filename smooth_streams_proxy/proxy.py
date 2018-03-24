@@ -24,6 +24,7 @@ import m3u8
 import pytz
 import requests
 from configobj import ConfigObj
+from cryptography.fernet import Fernet
 from cryptography.fernet import InvalidToken
 from tzlocal import get_localzone
 from watchdog.events import FileSystemEventHandler
@@ -435,6 +436,9 @@ class SmoothStreamsProxy():
 
         if SmoothStreamsProxyUtility.determine_password_state(smooth_streams_password) == \
                 SmoothStreamsProxyPasswordState.DECRYPTED:
+            if cls._fernet_key is None:
+                cls._fernet_key = Fernet.generate_key()
+
             cls._scrub_configuration_file()
         else:
             if cls._fernet_key:
