@@ -3,6 +3,15 @@
 Release History
 ===============
 
+2.5.0 (23-03-2018)
+------------------
+* Migrate recordings REST API to `JSON API <http://jsonapi.org/>`_
+* Expand the scope of actions taken following configuration file modifications. Previously only changes to the level option were handled.
+* Move from ConfigParser to ConfigObj
+* Incorporate Cerberus library to validate recordings JSON API requests
+* Various bug fixes
+* Significant refactoring including splitting the monlithic module into multiple modules with clear separation of concerns
+
 2.0.1 (09-03-2018)
 ------------------
 * Various bug fixes
@@ -23,26 +32,20 @@ Release History
 
 1.2.1 (01-03-2018)
 ------------------
-
 * Code refactoring and various bug fixes
 
 1.2.0 (28-02-2018)
 ------------------
-
 * Added nimble session "hijacking"
     * The chunks.m3u8 link returned by SmoothStreams contains 2 parameters (nimblesessionid & wmsAuthSign)
     * wmsAuthSign is the authorization hash
-    * The chunks.m3u8 link is only updated if a user switches to a different channel. As long as the same channel is
-    being watched, the same chunks.m3u8 link is being used
-    * As a result if the authorization hash expires while a channel is being watched the stream will stop until the user
-    switches channels to retrieve a new authorization hash
-    * The functionality added is to prevent this from happening by manipulating the values of the 2 parameters
-    (nimblesessionid & wmsAuthSign) to valid values
+    * The chunks.m3u8 link is only updated if a user switches to a different channel. As long as the same channel is being watched, the same chunks.m3u8 link is being used
+    * As a result if the authorization hash expires while a channel is being watched the stream will stop until the user switches channels to retrieve a new authorization hash
+    * The functionality added is to prevent this from happening by manipulating the values of the 2 parameters (nimblesessionid & wmsAuthSign) to valid values
 * Code refactoring and various bug fixes
 
 1.1.0 (27-02-2018)
 ------------------
-
 * Added validations when parsing the configuration file along with error messages
 * Added a timer that will automatically retrieve a new authorization hash
     * The timer will trigger 45 seconds before the authorization hash is set to expire
@@ -53,5 +56,4 @@ Release History
 
 1.0.0 (24-02-2018)
 ------------------
-
 * First public release

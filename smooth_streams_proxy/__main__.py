@@ -1,3 +1,3 @@
-from .smooth_streams_proxy import main
+from .proxy import main
 
 main()

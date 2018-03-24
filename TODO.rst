@@ -1,1 +1,5 @@
+- JSON API Server Responsibilities
+- WAN connections authentication
+- Generate new hash for rtmp playlist
 - Serve webpages to manage recordings (i.e. Scheduled a recording, deleted a scheduled recording, delete an actual recording)
+- Cache ts files
