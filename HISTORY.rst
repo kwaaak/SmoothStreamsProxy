@@ -3,6 +3,11 @@
 Release History
 ===============
 
+2.5.1 (25-03-2018)
+------------------
+* Expand recordings REST API error messages to contain a message aimed at developers and a message aimed at users
+* Various bug fixes
+
 2.5.0 (23-03-2018)
 ------------------
 * Migrate recordings REST API to `JSON API <http://jsonapi.org/>`_
@@ -10,7 +15,7 @@ Release History
 * Move from ConfigParser to ConfigObj
 * Incorporate Cerberus library to validate recordings JSON API requests
 * Various bug fixes
-* Significant refactoring including splitting the monlithic module into multiple modules with clear separation of concerns
+* Significant refactoring including splitting the monolithic module into multiple modules with clear separation of concerns
 
 2.0.1 (09-03-2018)
 ------------------

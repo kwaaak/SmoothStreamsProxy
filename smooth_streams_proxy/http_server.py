@@ -106,7 +106,10 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                             {
                                 'status': '{0}'.format(requests.codes.BAD_REQUEST),
                                 'title': 'Unsupported request body',
-                                'detail': '{0} recordings does not support a request body'.format(self.command)
+                                'field': None,
+                                'developer_message': '{0} recordings does not support a request body'.format(
+                                    self.command),
+                                'user_message': 'The request is badly formatted.'
                             }
                         ]
                     }
@@ -130,10 +133,13 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                 'status': '{0}'.format(requests.codes.BAD_REQUEST),
                                 'title': 'Unsupported query parameter{0}'.format(
                                     's' if len(query_string_parameters_validator.errors) > 1 else ''),
-                                'detail': '{0} recordings does not support [\'{1}\'] query parameter{2}'.format(
+                                'field': list(sorted(query_string_parameters_validator.errors)),
+                                'developer_message': '{0} recordings does not support [\'{1}\'] query parameter'
+                                                     '{2}'.format(
                                     self.command,
                                     ', '.join(query_string_parameters_validator.errors),
-                                    's' if len(query_string_parameters_validator.errors) > 1 else '')
+                                    's' if len(query_string_parameters_validator.errors) > 1 else ''),
+                                'user_message': 'The request is badly formatted.'
                             }
                         ]
                     }
@@ -221,7 +227,9 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                 {
                                     'status': '{0}'.format(requests.codes.NOT_FOUND),
                                     'title': 'Resource not found',
-                                    'detail': 'Recording with ID {0} does not exist'.format(recording_id)
+                                    'field': None,
+                                    'developer_message': 'Recording with ID {0} does not exist'.format(recording_id),
+                                    'user_message': 'Requested recording no longer exists.'
                                 }
                             ]
                         }
@@ -467,7 +475,10 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                             {
                                 'status': '{0}'.format(requests.codes.BAD_REQUEST),
                                 'title': 'Unsupported request body',
-                                'detail': '{0} recordings does not support a request body'.format(self.command)
+                                'field': None,
+                                'developer_message': '{0} recordings does not support a request body'.format(
+                                    self.command),
+                                'user_message': 'The request is badly formatted.'
                             }
                         ]
                     }
@@ -507,7 +518,9 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                     'status': '{0}'.format(requests.codes.BAD_REQUEST),
                                     'title': 'Unsupported query parameter{0}'.format(
                                         's' if len(query_string_parameters_validator.errors) > 1 else ''),
-                                    'detail': '{0} recordings does not support [\'{1}\'] query parameter{2}'.format(
+                                    'field': list(sorted(query_string_parameters_validator.errors)),
+                                    'developer_message': '{0} recordings does not support [\'{1}\'] query parameter'
+                                                         '{2}'.format(
                                         self.command,
                                         ', '.join([error_key
                                                    for error_key in query_string_parameters_validator.errors
@@ -515,7 +528,8 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                         's' if len(
                                             [error_key
                                              for error_key in query_string_parameters_validator.errors
-                                             if error_key != 'status']) > 1 else '')
+                                             if error_key != 'status']) > 1 else ''),
+                                    'user_message': 'The request is badly formatted.'
                                 }
                             ]}
                             get_recordings_response_status_code = requests.codes.BAD_REQUEST
@@ -537,9 +551,12 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                     {
                                         'status': '{0}'.format(requests.codes.UNPROCESSABLE_ENTITY),
                                         'title': 'Invalid query parameter value',
-                                        'detail': '{0} recordings query parameter [\'status\'] value \'{1}\' '
-                                                  'is not supported'.format(self.command,
-                                                                            requested_query_string_parameters['status'])
+                                        'field': ['status'],
+                                        'developer_message': '{0} recordings query parameter [\'status\'] value '
+                                                             '\'{1}\' is not supported'.format(
+                                            self.command,
+                                            requested_query_string_parameters['status']),
+                                        'user_message': 'The request is badly formatted.'
                                     }
                                 ]
                             }
@@ -571,7 +588,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
                         get_recordings_response_status_code = requests.codes.OK
                 elif re.match('\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z',
-                              requested_path_tokens[1] and requested_path_tokens_length == 2):
+                              requested_path_tokens[1]) and requested_path_tokens_length == 2:
                     query_string_parameters_schema = {}
                     query_string_parameters_validator = SmoothStreamsProxyCerberusValidator(
                         query_string_parameters_schema)
@@ -595,10 +612,13 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                     'status': '{0}'.format(requests.codes.BAD_REQUEST),
                                     'title': 'Unsupported query parameter{0}'.format(
                                         's' if len(query_string_parameters_validator.errors) > 1 else ''),
-                                    'detail': '{0} recordings does not support [\'{1}\'] query parameter{2}'.format(
+                                    'field': list(sorted(query_string_parameters_validator.errors)),
+                                    'developer_message': '{0} recordings does not support [\'{1}\'] query parameter'
+                                                         '{2}'.format(
                                         self.command,
                                         ', '.join(query_string_parameters_validator.errors),
-                                        's' if len(query_string_parameters_validator.errors) > 1 else '')
+                                        's' if len(query_string_parameters_validator.errors) > 1 else ''),
+                                    'user_message': 'The request is badly formatted.'
                                 }
                             ]
                         }
@@ -644,7 +664,10 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                     {
                                         'status': '{0}'.format(requests.codes.NOT_FOUND),
                                         'title': 'Resource not found',
-                                        'detail': 'Recording with ID {0} does not exist'.format(recording_id)
+                                        'field': None,
+                                        'developer_message': 'Recording with ID {0} does not exist'.format(
+                                            recording_id),
+                                        'user_message': 'Requested recording no longer exists.'
                                     }
                                 ]
                             }
@@ -846,7 +869,9 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                             {
                                 'status': '{0}'.format(requests.codes.BAD_REQUEST),
                                 'title': 'Invalid request body',
-                                'detail': 'Request body is not a valid JSON document'.format(self.command)
+                                'field': None,
+                                'developer_message': 'Request body is not a valid JSON document'.format(self.command),
+                                'user_message': 'The request is badly formatted.'
                             }
                         ]
                     }
@@ -870,10 +895,13 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                 'status': '{0}'.format(requests.codes.BAD_REQUEST),
                                 'title': 'Unsupported query parameter{0}'.format(
                                     's' if len(query_string_parameters_validator.errors) > 1 else ''),
-                                'detail': '{0} recordings does not support [\'{1}\'] query parameter{2}'.format(
+                                'field': list(sorted(query_string_parameters_validator.errors)),
+                                'developer_message': '{0} recordings does not support [\'{1}\'] query parameter'
+                                                     '{2}'.format(
                                     self.command,
                                     ', '.join(query_string_parameters_validator.errors),
-                                    's' if len(query_string_parameters_validator.errors) > 1 else '')
+                                    's' if len(query_string_parameters_validator.errors) > 1 else ''),
+                                'user_message': 'The request is badly formatted.'
                             }
                         ]
                     }
@@ -901,7 +929,7 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
 
                     invalid_channel_number = [match.group().replace(
                         '\'', '') for match in re.finditer(
-                        '(\'[^{,\[]+\')(?=: \[\'must be between 00 and 150\'\])',
+                        '(\'[^{,\[]+\')(?=: \[\'must be between [0-9]{2} and [0-9]{2,4}\'\])',
                         '{0}'.format(post_request_body_validator.errors))]
 
                     invalid_end_date_time_in_the_future = [match.group().replace(
@@ -937,34 +965,51 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                 {
                                     'status': '{0}'.format(requests.codes.BAD_REQUEST),
                                     'title': 'Invalid resource creation request',
-                                    'detail': 'Request body {0}'.format(
+                                    'field': '{0}'.format(missing_required_fields if missing_required_fields
+                                                          else included_unknown_fields),
+                                    'developer_message': 'Request body {0}'.format(
                                         'is missing mandatory field{0} {1}'.format(
                                             's' if len(missing_required_fields) > 1 else '',
                                             missing_required_fields) if missing_required_fields else
                                         'includes unknown field{0} {1}'.format(
                                             's' if len(included_unknown_fields) > 1 else '',
-                                            included_unknown_fields))
+                                            included_unknown_fields)),
+                                    'user_message': 'The request is badly formatted.'
                                 }
                             ]
                         }
                         post_recordings_response_status_code = requests.codes.BAD_REQUEST
                     elif incorrect_type_fields or invalid_type_value or invalid_channel_number or \
                             invalid_end_date_time_in_the_future or invalid_end_date_time_after_start_date_time:
-                        error_message = None
+                        field = None
+                        developer_message = None
+                        user_message = None
 
                         if incorrect_type_fields:
-                            error_message = 'Request body includes field{0} with invalid type {1}'.format(
+                            field = incorrect_type_fields
+                            developer_message = 'Request body includes field{0} with invalid type {1}'.format(
                                 's' if len(incorrect_type_fields) > 1 else '',
                                 incorrect_type_fields)
-                        elif invalid_type_value:
-                            error_message = '[\'type\'] must be recordings'
-                        elif invalid_channel_number:
-                            error_message = '[\'channel_number\'] must be between 00 and 150'
-                        elif invalid_end_date_time_in_the_future:
-                            error_message = '[\'end_date_time_in_utc\'] must be later than now'
-                        elif invalid_end_date_time_after_start_date_time:
-                            error_message = '[\'end_date_time_in_utc\'] must be later than [\'start_date_time_in_utc\']'
-
+                            user_message = 'The request is badly formatted.'
+                        elif invalid_type_value == ['type']:
+                            field = invalid_type_value
+                            developer_message = '[\'type\'] must be recordings'
+                            user_message = 'The request is badly formatted.'
+                        elif invalid_channel_number == ['channel_number']:
+                            field = invalid_channel_number
+                            developer_message = '[\'channel_number\'] {0}'.format(
+                                post_request_body_validator.errors['data'][0]['attributes'][0]['channel_number'][0])
+                            user_message = 'The requested channel does not exist.'
+                        elif invalid_end_date_time_in_the_future == ['end_date_time_in_utc']:
+                            field = invalid_end_date_time_in_the_future
+                            developer_message = '[\'end_date_time_in_utc\'] must be later than now'
+                            user_message = 'The requested recording is in the past.'
+                        elif invalid_end_date_time_after_start_date_time == ['end_date_time_in_utc']:
+                            field = invalid_end_date_time_after_start_date_time
+                            developer_message = '[\'end_date_time_in_utc\'] must be later than ' \
+                                                '[\'start_date_time_in_utc\']'
+                            user_message = 'The request is badly formatted.'
+                        
                         logger.error(
                             'Error encountered processing request\n'
                             'Source IP      => {0}\n'
@@ -975,14 +1020,16 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                 client_ip_address,
                                 requested_path_with_query_string,
                                 pprint.pformat(post_request_body, indent=4),
-                                error_message))
+                                developer_message))
 
                         post_recordings_response = {
                             'errors': [
                                 {
                                     'status': '{0}'.format(requests.codes.UNPROCESSABLE_ENTITY),
                                     'title': 'Invalid resource creation request',
-                                    'detail': '{0}'.format(error_message)
+                                    'field': field,
+                                    'developer_message': '{0}'.format(developer_message),
+                                    'user_message': '{0}'.format(user_message)
                                 }
                             ]
                         }
@@ -1004,7 +1051,9 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                                 {
                                     'status': '{0}'.format(requests.codes.UNPROCESSABLE_ENTITY),
                                     'title': 'Invalid resource creation request',
-                                    'detail': 'Unexpected error'
+                                    'field': None,
+                                    'developer_message': 'Unexpected error',
+                                    'user_message': 'The request is badly formatted.'
                                 }
                             ]
                         }
@@ -1082,8 +1131,10 @@ class SmoothStreamsProxyHTTPRequestHandler(BaseHTTPRequestHandler):
                             'errors': [
                                 {
                                     'status': '{0}'.format(requests.codes.CONFLICT),
+                                    'field': None,
                                     'title': 'Duplicate resource',
-                                    'detail': 'Recording already scheduled'
+                                    'developer_message': 'Recording already scheduled',
+                                    'user_message': 'The recording is already scheduled'
                                 }
                             ]
                         }

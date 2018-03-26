@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 class SmoothStreamsProxyCerberusValidator(Validator):
     def _validate_is_channel_number_valid(self, is_channel_number_valid, field, value):
         if is_channel_number_valid and not SmoothStreamsProxy.is_channel_number_in_channel_map(value):
-            self._error(field, 'must be between 00 and 150')
+            self._error(field, 'must be between {0:02} and {1:02}'.format(
+                *SmoothStreamsProxy.get_channel_numbers_range()))
 
     def _validate_is_end_date_time_after_start_date_time(self, other, field, value):
         if other not in self.document:

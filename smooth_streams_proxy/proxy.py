@@ -1204,6 +1204,11 @@ class SmoothStreamsProxy():
                 channel_number)
 
     @classmethod
+    def get_channel_numbers_range(cls):
+        with cls._channel_map_lock:
+            return (min(cls._channel_map), max(cls._channel_map))
+
+    @classmethod
     def get_configuration_parameter(cls, parameter_name):
         with cls._configuration_lock:
             return cls._configuration[parameter_name]
