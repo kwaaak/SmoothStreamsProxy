@@ -26,6 +26,7 @@ class SmoothStreamsProxyUtility():
     def construct_response_headers(cls, response_content, content_type):
         response_headers = {
             'Accept-Ranges': 'bytes',
+            'Access-Control-Allow-Methods': 'DELETE, GET, OPTIONS, POST',
             'Access-Control-Allow-Origin': '*'
         }
 
